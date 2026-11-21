@@ -3,212 +3,145 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>YOGULÉ • Sistema Operativo de Pedidos y Trazabilidad</title>
+  <title>YOGULÉ • Control de Pedidos y Trazabilidad</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
 
-  <!-- BARRA SUPERIOR DE CONTROL DEL PROTOTIPO -->
+  <!-- BARRA SUPERIOR DEL PROTOTIPO -->
   <div class="proto-topbar">
     <div class="proto-topbar-left">
       <span id="syncStatusPill" class="sync-pill online">
         <span class="sync-dot"></span>
-        <span id="syncStatusText">Conectado a Supabase</span>
+        <span id="syncStatusText">Supabase En Línea</span>
       </span>
       <button class="proto-btn" onclick="toggleOfflineMode()" id="btnOfflineToggle">
-        📡 Simular Sin Internet
+        Simular Sin Internet
       </button>
       <button class="proto-btn" onclick="reloadFromSupabase()">
-        🔄 Sincronizar
+        Sincronizar
       </button>
     </div>
     <div class="proto-topbar-right">
-      <button class="proto-btn" onclick="toggleTrainingGuide()" id="btnTrainingGuide">
-        ❓ Ayuda Rápida (3 Pasos)
-      </button>
       <button class="proto-btn active" id="btnViewDesktop" onclick="setViewportMode('desktop')">
-        💻 Vista PC
+        Vista PC
       </button>
       <button class="proto-btn" id="btnViewMobile" onclick="setViewportMode('mobile')">
-        📱 Vista Celular
+        Vista Celular
       </button>
     </div>
   </div>
 
   <div id="viewportWrapper" class="viewport-wrapper">
 
-    <!-- CABECERA OPERATIVA LIMPIA YOGULÉ -->
+    <!-- CABECERA COMPACTA -->
     <header class="brand-header">
       <div class="brand-identity">
-        <img src="assets/logo-yogule.jpg" alt="Logo Yogulé" class="brand-logo" />
+        <img src="assets/logo-yogule.jpg" alt="Yogulé" class="brand-logo" />
         <div class="brand-titles">
-          <h1>YOGULÉ • Control de Pedidos</h1>
-          <p>Sistema Interno de Pedidos y Trazabilidad (Pendiente ➔ Recibido ➔ Entregado)</p>
+          <h1>YOGULÉ</h1>
+          <p>Control de Pedidos y Trazabilidad (1. Pendiente ➔ 2. Recibido ➔ 3. Entregado)</p>
         </div>
       </div>
 
       <div id="userSessionBox" class="user-session-box" style="display: none;">
-        <div class="user-session-info">
-          <div id="sessionUserName" class="user-session-name">Encargada</div>
-          <span id="sessionUserRole" class="user-session-role">ENCARGADO</span>
-        </div>
-        <button class="btn btn-outline" style="padding: 8px 14px; font-size: 0.88rem;" onclick="logout()">
-          🚪 Salir / Cambiar Usuario
+        <span id="sessionUserName" class="user-session-name">Encargada</span>
+        <span id="sessionUserRole" class="user-session-role">ENCARGADO</span>
+        <button class="btn btn-outline" style="padding: 3px 8px; font-size: 11px;" onclick="logout()">
+          Cambiar Usuario
         </button>
       </div>
     </header>
 
-    <!-- GUÍA RÁPIDA DE CAPACITACIÓN (Oculta por defecto para no meter ruido visual) -->
-    <section id="trainingGuideSection" class="training-guide" style="display: none;">
-      <div class="training-guide-header">
-        <h2>🎓 Flujo de Trabajo en 3 Estados</h2>
-        <button class="btn btn-outline" style="padding: 5px 10px; font-size: 0.82rem;" onclick="toggleTrainingGuide()">
-          Cerrar ✕
-        </button>
-      </div>
-      <div class="training-steps-grid">
-        <div class="training-step-card">
-          <div class="training-step-num">1</div>
-          <div>
-            <strong>🟠 PENDIENTE</strong>
-            <p style="font-size: 0.88rem; color: #475569;">
-              Cuando el cliente envía su pedido o la encargada lo registra.
-            </p>
-          </div>
-        </div>
-        <div class="training-step-card">
-          <div class="training-step-num">2</div>
-          <div>
-            <strong>🔵 RECIBIDO</strong>
-            <p style="font-size: 0.88rem; color: #475569;">
-              Cuando la encargada ya lo vio y marcó el checklist de productos alistados.
-            </p>
-          </div>
-        </div>
-        <div class="training-step-card">
-          <div class="training-step-num">3</div>
-          <div>
-            <strong>🟢 ENTREGADO</strong>
-            <p style="font-size: 0.88rem; color: #475569;">
-              Cuando el pedido ya fue entregado al cliente.
-            </p>
-          </div>
-        </div>
-      </div>
-    </section>
-
     <!-- ======================================================================
-         PANTALLA 1: INICIO DE SESIÓN (LIMPIO Y DIRECTO)
+         PANTALLA 1: INICIO DE SESIÓN COMPACTO
          ====================================================================== -->
     <main id="loginView">
       <div class="login-container">
         <div class="card">
-          <div class="card-title">🔐 Iniciar Sesión</div>
-          <p class="card-subtitle">
-            Ingresa con tu usuario y contraseña para registrar o revisar pedidos.
-          </p>
+          <div class="card-title">Iniciar Sesión</div>
+          <p class="card-subtitle">Ingresa con tu usuario y contraseña.</p>
 
           <form onsubmit="handleManualLogin(event)">
             <div class="form-group">
               <label class="form-label" for="loginUsername">Usuario</label>
-              <input
-                type="text"
-                id="loginUsername"
-                class="form-input"
-                placeholder="Ej. encargada o maria_arequipa"
-                required
-              />
+              <input type="text" id="loginUsername" class="form-input" placeholder="Ej. encargada o maria_arequipa" required />
             </div>
             <div class="form-group">
               <label class="form-label" for="loginPassword">Contraseña</label>
-              <input
-                type="password"
-                id="loginPassword"
-                class="form-input"
-                placeholder="Ingresa tu contraseña"
-                required
-              />
+              <input type="password" id="loginPassword" class="form-input" placeholder="Contraseña" required />
             </div>
             <button type="submit" class="btn btn-primary btn-block">
-              Ingresar al Sistema
+              Ingresar
             </button>
           </form>
         </div>
 
-        <!-- Acceso Rápido para Pruebas -->
         <div class="card">
-          <div class="card-title">⚡ Cuentas de Prueba (1 Clic)</div>
-          <p class="card-subtitle">
-            Selecciona un usuario de la base de datos para probar la vista de Encargada o de Cliente:
-          </p>
+          <div class="card-title">Cuentas de Prueba (1 Clic)</div>
+          <p class="card-subtitle">Toca un usuario para entrar como Encargada o como Cliente:</p>
           <div id="quickLoginList" class="quick-login-list"></div>
         </div>
       </div>
     </main>
 
     <!-- ======================================================================
-         PANTALLA 2: PANEL DE LA ENCARGADA
+         PANTALLA 2: PANEL DE LA ENCARGADA (COMPACTO EN 1 PANTALLA)
          ====================================================================== -->
     <main id="managerView" style="display: none;">
 
       <nav class="main-nav">
         <button class="nav-tab active" id="tabBtnOrders" onclick="switchManagerTab('orders')">
-          📋 1. Pedidos
-          <span id="badgePendingCount" class="nav-badge">0</span>
+          1. Pedidos <span id="badgePendingCount" class="nav-badge">0</span>
         </button>
         <button class="nav-tab" id="tabBtnWhatsapp" onclick="switchManagerTab('whatsapp')">
-          💬 2. Pegar de WhatsApp
+          2. Pegar de WhatsApp
         </button>
         <button class="nav-tab" id="tabBtnClients" onclick="switchManagerTab('clients')">
-          👥 3. Cartera de Clientes
+          3. Cartera de Clientes
         </button>
         <button class="nav-tab" id="tabBtnProducts" onclick="switchManagerTab('products')">
-          🥛 4. Productos
+          4. Productos
         </button>
       </nav>
 
-      <!-- SUB-VISTA A: TABLERO DE PEDIDOS (3 ESTADOS) -->
+      <!-- SUB-VISTA A: TABLERO DE PEDIDOS -->
       <section id="managerTabOrders">
-        <div class="status-semaphore-grid">
-          <div class="semaphore-card pendiente selected" id="filterCardPENDIENTE" onclick="setOrderFilter('PENDIENTE')">
-            <span class="semaphore-count" id="countPendiente">0</span>
-            <span class="semaphore-label">🟠 PENDIENTE</span>
-            <span class="semaphore-desc">Nuevos pedidos</span>
-          </div>
-          <div class="semaphore-card recibido" id="filterCardRECIBIDO" onclick="setOrderFilter('RECIBIDO')">
-            <span class="semaphore-count" id="countRecibido">0</span>
-            <span class="semaphore-label">🔵 RECIBIDO</span>
-            <span class="semaphore-desc">Vistos / Alistados</span>
-          </div>
-          <div class="semaphore-card entregado" id="filterCardENTREGADO" onclick="setOrderFilter('ENTREGADO')">
-            <span class="semaphore-count" id="countEntregado">0</span>
-            <span class="semaphore-label">🟢 ENTREGADO</span>
-            <span class="semaphore-desc">Entregados al cliente</span>
-          </div>
-          <div class="semaphore-card todos" id="filterCardTODOS" onclick="setOrderFilter('TODOS')">
-            <span class="semaphore-count" id="countTodos">0</span>
-            <span class="semaphore-label">📋 TODOS</span>
-            <span class="semaphore-desc">Historial general</span>
-          </div>
-        </div>
-
-        <div class="card" style="margin-bottom: 14px; padding: 12px 16px;">
-          <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between;">
-            <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center; flex: 1;">
-              <input
-                type="text"
-                id="searchOrdersInput"
-                class="form-input"
-                style="max-width: 280px; padding: 9px 12px;"
-                placeholder="🔍 Buscar por código YOG-00001 o cliente..."
-                oninput="renderManagerOrders()"
-              />
-              <select id="cityFilterSelect" class="form-select" style="max-width: 200px; padding: 9px 12px;" onchange="renderManagerOrders()">
-                <option value="TODAS">📍 Todas las ciudades</option>
-              </select>
+        <!-- Semáforo + Filtros en 1 sola barra -->
+        <div class="toolbar-row">
+          <div class="status-semaphore-grid">
+            <div class="semaphore-card pendiente selected" id="filterCardPENDIENTE" onclick="setOrderFilter('PENDIENTE')">
+              <span>1. PENDIENTE</span>
+              <span class="semaphore-count" id="countPendiente">0</span>
             </div>
-            <button class="btn btn-teal" style="padding: 9px 14px; font-size: 0.9rem;" onclick="switchManagerTab('whatsapp')">
-              ➕ Pegar Pedido de WhatsApp
+            <div class="semaphore-card recibido" id="filterCardRECIBIDO" onclick="setOrderFilter('RECIBIDO')">
+              <span>2. RECIBIDO</span>
+              <span class="semaphore-count" id="countRecibido">0</span>
+            </div>
+            <div class="semaphore-card entregado" id="filterCardENTREGADO" onclick="setOrderFilter('ENTREGADO')">
+              <span>3. ENTREGADO</span>
+              <span class="semaphore-count" id="countEntregado">0</span>
+            </div>
+            <div class="semaphore-card todos" id="filterCardTODOS" onclick="setOrderFilter('TODOS')">
+              <span>TODOS</span>
+              <span class="semaphore-count" id="countTodos">0</span>
+            </div>
+          </div>
+
+          <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
+            <input
+              type="text"
+              id="searchOrdersInput"
+              class="form-input"
+              style="width: 190px; padding: 4px 8px;"
+              placeholder="Buscar código o cliente..."
+              oninput="renderManagerOrders()"
+            />
+            <select id="cityFilterSelect" class="form-select" style="width: 150px; padding: 4px 8px;" onchange="renderManagerOrders()">
+              <option value="TODAS">Todas las ciudades</option>
+            </select>
+            <button class="btn btn-teal" onclick="switchManagerTab('whatsapp')">
+              + Pegar WhatsApp
             </button>
           </div>
         </div>
@@ -218,301 +151,236 @@
 
       <!-- SUB-VISTA B: PEGAR TEXTO DE WHATSAPP -->
       <section id="managerTabWhatsapp" style="display: none;">
-        <div class="login-container">
+        <div class="login-container" style="grid-template-columns: 1fr 1fr;">
           <div class="card">
-            <div class="card-title">💬 Crear Pedido desde Texto de WhatsApp</div>
-            <p class="card-subtitle">
-              Pega el texto del mensaje de WhatsApp para detectar automáticamente productos y cantidades sin errores de copia.
-            </p>
-
-            <div style="margin-bottom: 12px;">
-              <span style="font-size: 0.84rem; font-weight: 700; color: #475569;">Textos de prueba rápida:</span>
-              <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px;">
-                <button type="button" class="btn btn-outline" style="padding: 6px 10px; font-size: 0.82rem;" onclick="loadSampleWhatsApp(1)">
-                  Ejemplo María (Arequipa)
-                </button>
-                <button type="button" class="btn btn-outline" style="padding: 6px 10px; font-size: 0.82rem;" onclick="loadSampleWhatsApp(2)">
-                  Ejemplo Carlos (Cusco)
-                </button>
-                <button type="button" class="btn btn-outline" style="padding: 6px 10px; font-size: 0.82rem;" onclick="loadSampleWhatsApp(3)">
-                  Ejemplo Elena (Trujillo)
-                </button>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+              <div class="card-title">Pegar Mensaje de WhatsApp</div>
+              <div style="display: flex; gap: 4px;">
+                <button type="button" class="btn btn-outline" style="padding: 2px 6px; font-size: 11px;" onclick="loadSampleWhatsApp(1)">Ej. María</button>
+                <button type="button" class="btn btn-outline" style="padding: 2px 6px; font-size: 11px;" onclick="loadSampleWhatsApp(2)">Ej. Carlos</button>
+                <button type="button" class="btn btn-outline" style="padding: 2px 6px; font-size: 11px;" onclick="loadSampleWhatsApp(3)">Ej. Elena</button>
               </div>
             </div>
 
             <div class="form-group">
               <label class="form-label">1. Cliente:</label>
               <select id="waClientSelect" class="form-select" onchange="updateWaClientNeedsHint()"></select>
-              <div id="waClientNeedsHint" class="client-needs-box" style="margin-top: 8px; font-size: 0.86rem;"></div>
+              <div id="waClientNeedsHint" class="client-needs-box"></div>
             </div>
 
             <div class="form-group" style="margin-bottom: 0;">
-              <label class="form-label">2. Mensaje de WhatsApp:</label>
+              <label class="form-label">2. Texto del WhatsApp:</label>
               <textarea
                 id="waRawText"
                 class="form-textarea"
-                rows="5"
-                placeholder="Pega aquí el mensaje del cliente..."
+                rows="4"
+                placeholder="Pega aquí el texto del pedido..."
                 oninput="parseWhatsAppTextLive()"
               ></textarea>
             </div>
           </div>
 
           <div class="card">
-            <div class="card-title">✅ Productos Detectados</div>
-            <p class="card-subtitle">
-              Verifica o ajusta cantidades antes de registrar el pedido:
-            </p>
+            <div class="card-title">Productos y Cantidades Detectadas</div>
+            <p class="card-subtitle">Ajusta las cantidades si es necesario y guarda el pedido:</p>
             <div id="waParsedPreview"></div>
           </div>
         </div>
       </section>
 
-      <!-- SUB-VISTA C: CARTERA DE CLIENTES + CONFIGURACIÓN DE SU PEDIDO HABITUAL -->
+      <!-- SUB-VISTA C: CARTERA DE CLIENTES -->
       <section id="managerTabClients" style="display: none;">
-        <div class="card" style="margin-bottom: 16px;">
-          <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px;">
-            <div>
-              <div class="card-title">👥 Cartera de Clientes</div>
-              <p class="card-subtitle" style="margin-bottom: 0;">
-                Administra clientes, sus credenciales de acceso (Usuario/Contraseña) y define <strong>qué productos componen su Pedido Habitual</strong>.
-              </p>
-            </div>
-            <button class="btn btn-primary" onclick="toggleNewClientForm()">
-              ➕ Registrar Nuevo Cliente
-            </button>
+        <div class="toolbar-row">
+          <div>
+            <strong>Cartera de Clientes</strong>
+            <span style="color: #64748b; margin-left: 6px;">Configura el Pedido Habitual y las credenciales (Usuario/Clave) de cada cliente.</span>
           </div>
-
-          <!-- Formulario Crear Cliente -->
-          <form id="newClientForm" onsubmit="handleCreateClient(event)" style="display: none; margin-top: 16px; padding-top: 16px; border-top: 2px dashed #cbd5e1;">
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px;">
-              <div class="form-group">
-                <label class="form-label">Nombre de Contacto *</label>
-                <input type="text" id="ncName" class="form-input" placeholder="Ej. Pedro Mamani" required />
-              </div>
-              <div class="form-group">
-                <label class="form-label">Negocio / Distribuidora *</label>
-                <input type="text" id="ncBusiness" class="form-input" placeholder="Ej. Comercial Sur" required />
-              </div>
-              <div class="form-group">
-                <label class="form-label">Ciudad *</label>
-                <input type="text" id="ncCity" class="form-input" placeholder="Ej. Tacna" required />
-              </div>
-              <div class="form-group">
-                <label class="form-label">WhatsApp *</label>
-                <input type="text" id="ncPhone" class="form-input" placeholder="Ej. 952112233" required />
-              </div>
-              <div class="form-group">
-                <label class="form-label">Dirección / Zona de Reparto</label>
-                <input type="text" id="ncAddress" class="form-input" placeholder="Ej. Jr. Mariano Núñez 315" />
-              </div>
-              <div class="form-group">
-                <label class="form-label">Nota del Cliente</label>
-                <input type="text" id="ncNotes" class="form-input" placeholder="Ej. Reparto lunes y jueves" />
-              </div>
-              <div class="form-group">
-                <label class="form-label">👤 Usuario *</label>
-                <input type="text" id="ncUser" class="form-input" placeholder="Ej. pedro_tacna" required />
-              </div>
-              <div class="form-group">
-                <label class="form-label">🔑 Contraseña *</label>
-                <input type="text" id="ncPass" class="form-input" value="123456" required />
-              </div>
-            </div>
-            <div style="display: flex; gap: 10px; justify-content: flex-end;">
-              <button type="button" class="btn btn-outline" onclick="toggleNewClientForm()">Cancelar</button>
-              <button type="submit" class="btn btn-green">💾 Guardar Cliente</button>
-            </div>
-          </form>
+          <button class="btn btn-primary" onclick="toggleNewClientForm()">
+            + Nuevo Cliente
+          </button>
         </div>
 
-        <!-- Modal / Panel de Edición del Pedido Habitual de un Cliente (para la Encargada) -->
-        <div id="managerHabitualEditorCard" class="card" style="display: none; margin-bottom: 16px; border: 3px solid var(--yogule-gold); background: #fffdf5;">
-          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 12px;">
+        <!-- Formulario Nuevo Cliente Compacto -->
+        <form id="newClientForm" class="card" onsubmit="handleCreateClient(event)" style="display: none; margin-bottom: 8px;">
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px;">
             <div>
-              <div class="card-title" id="managerHabitualEditorTitle">✏️ Configurar Pedido Habitual del Cliente</div>
-              <p style="font-size: 0.88rem; color: #78350f;">
-                Indica cuántas unidades de cada producto pide habitualmente este cliente (deja en 0 los que no pide):
-              </p>
+              <label class="form-label">Nombre Contacto *</label>
+              <input type="text" id="ncName" class="form-input" required />
             </div>
-            <button class="btn btn-outline" style="padding: 6px 12px;" onclick="closeManagerHabitualEditor()">Cerrar ✕</button>
+            <div>
+              <label class="form-label">Negocio / Tienda *</label>
+              <input type="text" id="ncBusiness" class="form-input" required />
+            </div>
+            <div>
+              <label class="form-label">Ciudad *</label>
+              <input type="text" id="ncCity" class="form-input" required />
+            </div>
+            <div>
+              <label class="form-label">WhatsApp *</label>
+              <input type="text" id="ncPhone" class="form-input" required />
+            </div>
+            <div>
+              <label class="form-label">Dirección Reparto</label>
+              <input type="text" id="ncAddress" class="form-input" />
+            </div>
+            <div>
+              <label class="form-label">Usuario *</label>
+              <input type="text" id="ncUser" class="form-input" required />
+            </div>
+            <div>
+              <label class="form-label">Contraseña *</label>
+              <input type="text" id="ncPass" class="form-input" value="123456" required />
+            </div>
+            <div style="display: flex; align-items: flex-end; gap: 4px;">
+              <button type="submit" class="btn btn-green" style="flex:1;">Guardar</button>
+              <button type="button" class="btn btn-outline" onclick="toggleNewClientForm()">✕</button>
+            </div>
           </div>
-          <div id="managerHabitualProductsGrid" class="products-grid" style="margin-bottom: 14px;"></div>
-          <div style="display: flex; justify-content: flex-end; gap: 10px;">
-            <button class="btn btn-outline" onclick="closeManagerHabitualEditor()">Cancelar</button>
-            <button class="btn btn-green" onclick="saveManagerHabitualConfig()">💾 Guardar Pedido Habitual en Supabase</button>
+        </form>
+
+        <!-- Editor compacto del Pedido Habitual de un Cliente -->
+        <div id="managerHabitualEditorCard" class="card" style="display: none; margin-bottom: 8px; border: 2px solid var(--yogule-gold); background: #fffdf5;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+            <strong id="managerHabitualEditorTitle">Configurar Pedido Habitual del Cliente</strong>
+            <div style="display: flex; gap: 6px;">
+              <button class="btn btn-green" onclick="saveManagerHabitualConfig()">Guardar Pedido Habitual</button>
+              <button class="btn btn-outline" onclick="closeManagerHabitualEditor()">Cerrar ✕</button>
+            </div>
           </div>
+          <div id="managerHabitualProductsGrid" class="products-grid"></div>
         </div>
 
         <div id="clientsPortfolioGrid" class="clients-grid"></div>
       </section>
 
-      <!-- SUB-VISTA D: GESTIÓN DE PRODUCTOS YOGULÉ (SIN RUIDO PUBLICITARIO NI STOCK, CON BOTÓN AGREGAR PRODUCTO) -->
+      <!-- SUB-VISTA D: GESTIÓN DE PRODUCTOS (SIN PRECIOS NI STOCK) -->
       <section id="managerTabProducts" style="display: none;">
-        <div class="card" style="margin-bottom: 16px;">
-          <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px;">
-            <div>
-              <div class="card-title">🥛 Productos Yogulé</div>
-              <p class="card-subtitle" style="margin-bottom: 0;">
-                Todos los productos activos que agregues aquí aparecerán inmediatamente en el catálogo de los clientes.
-              </p>
-            </div>
-            <button class="btn btn-primary" onclick="toggleNewProductForm()">
-              ➕ Agregar Nuevo Producto
-            </button>
+        <div class="toolbar-row">
+          <div>
+            <strong>Catálogo de Productos Yogulé</strong>
+            <span style="color: #64748b; margin-left: 6px;">Agrega o activa los productos que verán los clientes al hacer sus pedidos.</span>
           </div>
-
-          <!-- Formulario para que la Encargada Agregue Nuevos Productos -->
-          <form id="newProductForm" onsubmit="handleCreateProduct(event)" style="display: none; margin-top: 16px; padding-top: 16px; border-top: 2px dashed #cbd5e1;">
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
-              <div class="form-group">
-                <label class="form-label">Nombre del Producto *</label>
-                <input type="text" id="npName" class="form-input" placeholder="Ej. Yogurt Probio Chirimoya" required />
-              </div>
-              <div class="form-group">
-                <label class="form-label">Sabor / Variante *</label>
-                <input type="text" id="npFlavor" class="form-input" placeholder="Ej. Chirimoya" required />
-              </div>
-              <div class="form-group">
-                <label class="form-label">Presentación *</label>
-                <input type="text" id="npPresentation" class="form-input" value="Botella 1000 cc (1L)" required />
-              </div>
-              <div class="form-group">
-                <label class="form-label">Categoría / Línea</label>
-                <select id="npLine" class="form-select">
-                  <option value="Yogurt Probio">Yogurt Probio</option>
-                  <option value="Derivados Lácteos">Derivados Lácteos</option>
-                  <option value="Packs Mayoristas">Packs Mayoristas</option>
-                </select>
-              </div>
-              <div class="form-group">
-                <label class="form-label">Precio Unitario (S/) *</label>
-                <input type="number" step="0.10" min="0" id="npPrice" class="form-input" placeholder="Ej. 8.50" required />
-              </div>
-              <div class="form-group">
-                <label class="form-label">Icono</label>
-                <select id="npEmoji" class="form-select">
-                  <option value="🥛">🥛 Botella Yogurt</option>
-                  <option value="🍓">🍓 Fresa / Frutos Rojos</option>
-                  <option value="🍑">🍑 Durazno / Fruta</option>
-                  <option value="🫐">🫐 Sauco / Arándano</option>
-                  <option value="🍯">🍯 Lúcuma / Especial</option>
-                  <option value="🍍">🍍 Piña / Tropical</option>
-                  <option value="🧀">🧀 Queso / Derivado</option>
-                  <option value="📦">📦 Caja / Pack</option>
-                </select>
-              </div>
-            </div>
-            <div style="display: flex; gap: 10px; justify-content: flex-end;">
-              <button type="button" class="btn btn-outline" onclick="toggleNewProductForm()">Cancelar</button>
-              <button type="submit" class="btn btn-green">💾 Guardar Producto en Catálogo</button>
-            </div>
-          </form>
+          <button class="btn btn-primary" onclick="toggleNewProductForm()">
+            + Agregar Producto
+          </button>
         </div>
+
+        <!-- Formulario Compacto para Agregar Producto (Sin precios ni stock) -->
+        <form id="newProductForm" class="card" onsubmit="handleCreateProduct(event)" style="display: none; margin-bottom: 8px;">
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px; align-items: end;">
+            <div>
+              <label class="form-label">Nombre del Producto *</label>
+              <input type="text" id="npName" class="form-input" placeholder="Ej. Yogurt Probio Chirimoya" required />
+            </div>
+            <div>
+              <label class="form-label">Sabor / Variante *</label>
+              <input type="text" id="npFlavor" class="form-input" placeholder="Ej. Chirimoya" required />
+            </div>
+            <div>
+              <label class="form-label">Presentación *</label>
+              <input type="text" id="npPresentation" class="form-input" value="Botella 1000 cc (1L)" required />
+            </div>
+            <div>
+              <label class="form-label">Línea</label>
+              <select id="npLine" class="form-select">
+                <option value="Yogurt Probio">Yogurt Probio</option>
+                <option value="Derivados Lácteos">Derivados Lácteos</option>
+                <option value="Packs">Packs</option>
+              </select>
+            </div>
+            <div style="display: flex; gap: 6px;">
+              <button type="submit" class="btn btn-green" style="flex: 1;">Guardar Producto</button>
+              <button type="button" class="btn btn-outline" onclick="toggleNewProductForm()">✕</button>
+            </div>
+          </div>
+        </form>
 
         <div id="managerProductsGrid" class="products-grid"></div>
       </section>
     </main>
 
     <!-- ======================================================================
-         PANTALLA 3: PORTAL DEL CLIENTE (LIMPIO, CON DEFINICIÓN DE PEDIDO HABITUAL)
+         PANTALLA 3: PORTAL DEL CLIENTE (TODO CABE EN 1 PANTALLA, SOLO CANTIDADES)
          ====================================================================== -->
     <main id="clientView" style="display: none;">
 
-      <nav class="main-nav" style="grid-template-columns: repeat(3, 1fr);">
+      <nav class="main-nav">
         <button class="nav-tab active" id="clientTabBtnOrder" onclick="switchClientTab('newOrder')">
-          🛒 1. Hacer Pedido
+          1. Hacer Pedido
         </button>
         <button class="nav-tab" id="clientTabBtnHabitual" onclick="switchClientTab('habitualConfig')">
-          ⭐ 2. Mi Pedido Habitual
+          2. Configurar Mi Pedido Habitual
         </button>
         <button class="nav-tab" id="clientTabBtnHistory" onclick="switchClientTab('myOrders')">
-          🚚 3. Mis Pedidos
-          <span id="clientOrdersCountBadge" class="nav-badge">0</span>
+          3. Mis Pedidos <span id="clientOrdersCountBadge" class="nav-badge">0</span>
         </button>
       </nav>
 
-      <!-- CLIENTE SUB-VISTA 1: HACER PEDIDO -->
+      <!-- CLIENTE SUB-VISTA 1: HACER PEDIDO EN 1 SOLA PANTALLA -->
       <section id="clientSectionNewOrder">
-        <!-- Barra de Pedido Habitual (Cargar con 1 clic o ir a configurarlo) -->
-        <div class="card" style="margin-bottom: 14px; padding: 14px 18px; background: #fffdf5; border: 2px solid var(--yogule-gold);">
-          <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px;">
-            <div>
-              <strong style="color: #92400e; font-size: 1rem;">⭐ Tu Pedido Habitual Configurado:</strong>
-              <div id="clientFrequentSummary" style="font-size: 0.90rem; color: #78350f; margin-top: 2px;"></div>
-            </div>
-            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-              <button class="btn btn-outline" style="padding: 9px 13px; font-size: 0.88rem;" onclick="switchClientTab('habitualConfig')">
-                ✏️ Configurar mi Pedido Habitual
-              </button>
-              <button class="btn btn-primary" style="padding: 9px 15px; font-size: 0.90rem;" onclick="loadClientFrequentItemsToCart()">
-                ⚡ Cargar mi Pedido Habitual (1 Clic)
-              </button>
-            </div>
+        <!-- Barra superior con Pedido Habitual + Resumen Carrito en 1 sola fila compacta -->
+        <div class="toolbar-row" style="background: #fffdf5; border-color: var(--yogule-gold);">
+          <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+            <strong style="color: #92400e;">Pedido Habitual:</strong>
+            <span id="clientFrequentSummary" style="color: #78350f;"></span>
           </div>
-        </div>
-
-        <!-- Resumen de Pedido Actual -->
-        <div id="clientCartBox" class="card" style="margin-bottom: 16px; border: 2px solid var(--yogule-pink); padding: 16px 18px;">
-          <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px;">
-            <div>
-              <div class="card-title" style="font-size: 1.12rem; margin-bottom: 2px;">🧺 Productos en tu Pedido</div>
-              <p id="clientCartText" style="color: #475569; font-size: 0.92rem;">Selecciona las cantidades abajo o carga tu pedido habitual.</p>
-            </div>
-            <div style="text-align: right;">
-              <div style="font-size: 0.78rem; color: #64748b; font-weight: 800;">TOTAL</div>
-              <div id="clientCartTotal" style="font-size: 1.65rem; font-weight: 900; color: var(--yogule-pink);">S/ 0.00</div>
-            </div>
-          </div>
-
-          <div id="clientCartItemsDetail" style="margin-top: 10px;"></div>
-
-          <div id="clientCartSubmitArea" style="display: none; margin-top: 12px; padding-top: 12px; border-top: 1px solid #e2e8f0;">
-            <div style="margin-bottom: 12px;">
-              <label class="form-label">📝 Observación para el reparto (opcional)</label>
-              <input type="text" id="clientOrderNotes" class="form-input" style="padding: 9px 12px;" placeholder="Ej. Entregar por la mañana en tienda..." />
-            </div>
-            <div style="display: flex; flex-wrap: wrap; gap: 10px;">
-              <button type="button" class="btn btn-outline" style="padding: 12px 16px; font-size: 0.92rem;" onclick="saveCurrentCartAsHabitual()">
-                ⭐ Guardar esta selección como mi Pedido Habitual
-              </button>
-              <button type="button" class="btn btn-green" style="flex: 1; min-width: 240px; font-size: 1.05rem; padding: 14px;" onclick="submitClientOrder()">
-                ✅ Enviar Pedido (Estado: PENDIENTE)
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div id="clientProductsCatalog" class="products-grid"></div>
-      </section>
-
-      <!-- CLIENTE SUB-VISTA 2: CONFIGURAR / DEFINIR MI PEDIDO HABITUAL -->
-      <section id="clientSectionHabitualConfig" style="display: none;">
-        <div class="card" style="margin-bottom: 16px; border: 2px solid var(--yogule-gold);">
-          <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px;">
-            <div>
-              <div class="card-title">⭐ Configurar mi Pedido Habitual</div>
-              <p class="card-subtitle" style="margin-bottom: 0;">
-                Elige aquí los productos y cantidades que <strong>sueles necesitar siempre</strong>. Así la próxima vez podrás pedirlos con 1 solo clic (y la encargada también sabrá qué necesitas).
-              </p>
-            </div>
-            <button class="btn btn-green" onclick="saveClientHabitualConfig()">
-              💾 Guardar mi Pedido Habitual
+          <div style="display: flex; gap: 6px;">
+            <button class="btn btn-outline" onclick="switchClientTab('habitualConfig')">
+              Configurar Habitual
+            </button>
+            <button class="btn btn-primary" onclick="loadClientFrequentItemsToCart()">
+              Cargar Pedido Habitual (1 Clic)
             </button>
           </div>
+        </div>
+
+        <!-- Grilla compacta de todos los productos (caben todos sin hacer scroll) -->
+        <div id="clientProductsCatalog" class="products-grid" style="margin-bottom: 8px;"></div>
+
+        <!-- Barra inferior fija de confirmación del pedido (solo cantidades) -->
+        <div id="clientCartBox" class="card" style="border: 2px solid var(--yogule-pink);">
+          <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px;">
+            <div style="flex: 1; min-width: 220px;">
+              <strong id="clientCartText">Selecciona las cantidades arriba o carga tu pedido habitual.</strong>
+              <div id="clientCartItemsDetail" style="margin-top: 4px;"></div>
+            </div>
+
+            <div id="clientCartSubmitArea" style="display: none; align-items: center; gap: 6px; flex-wrap: wrap;">
+              <input
+                type="text"
+                id="clientOrderNotes"
+                class="form-input"
+                style="width: 210px;"
+                placeholder="Nota para el reparto (opcional)..."
+              />
+              <button type="button" class="btn btn-outline" onclick="saveCurrentCartAsHabitual()">
+                Guardar como Habitual
+              </button>
+              <button type="button" class="btn btn-green" onclick="submitClientOrder()">
+                Enviar Pedido (<span id="clientCartTotalUnits">0</span> und.)
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- CLIENTE SUB-VISTA 2: CONFIGURAR MI PEDIDO HABITUAL -->
+      <section id="clientSectionHabitualConfig" style="display: none;">
+        <div class="toolbar-row" style="border-color: var(--yogule-gold); background: #fffdf5;">
+          <div>
+            <strong>Configurar Mi Pedido Habitual</strong>
+            <span style="color: #78350f; margin-left: 6px;">Define las cantidades que pides siempre para cargarlas con 1 clic:</span>
+          </div>
+          <button class="btn btn-green" onclick="saveClientHabitualConfig()">
+            Guardar Mi Pedido Habitual
+          </button>
         </div>
 
         <div id="clientHabitualProductsGrid" class="products-grid"></div>
       </section>
 
-      <!-- CLIENTE SUB-VISTA 3: MIS PEDIDOS Y SEGUIMIENTO -->
+      <!-- CLIENTE SUB-VISTA 3: MIS PEDIDOS Y TRAZABILIDAD -->
       <section id="clientSectionMyOrders" style="display: none;">
-        <div class="card" style="margin-bottom: 14px; padding: 14px 18px;">
-          <div class="card-title" style="font-size: 1.12rem; margin-bottom: 2px;">🚚 Estado de mis Pedidos</div>
-          <p style="font-size: 0.90rem; color: #64748b;">
-            Estados: <strong>1. PENDIENTE</strong> (Enviado) ➔ <strong>2. RECIBIDO</strong> (Alistado por encargada) ➔ <strong>3. ENTREGADO</strong>.
-          </p>
-        </div>
         <div id="clientMyOrdersList" class="orders-list"></div>
       </section>
 
