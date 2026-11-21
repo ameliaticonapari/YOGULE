@@ -1,13 +1,12 @@
 /* ============================================================================
-   LÓGICA INTERACTIVA + CONEXIÓN EN VIVO A SUPABASE (SIN RLS) + MODO OFFLINE
-   Agroindustria Yogulé S.A.C. - Cabana, San Román, Puno
+   LÓGICA OPERATIVA LIMPIA + CONEXIÓN EN VIVO A SUPABASE (SIN RLS) + OFFLINE
+   Agroindustria Yogulé S.A.C.
    Proyecto Supabase: https://bpaxkwzbknmntqdsdzwu.supabase.co
    ============================================================================ */
 
 const SUPABASE_URL = 'https://bpaxkwzbknmntqdsdzwu.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_i6WIsrxYj12TyQeaCyJ4mg_tMNq7QGn';
 
-// Estado global de la aplicación
 const state = {
   isOfflineSimulated: false,
   pendingSyncQueue: [],
@@ -19,8 +18,11 @@ const state = {
   pedidos: [],
   detalles: [],
   trazabilidad: [],
-  clientCart: {}, // { producto_id: cantidad }
-  waDraftItems: {}, // { producto_id: cantidad }
+  clientCart: {},          // { producto_id: cantidad }
+  clientHabitualDraft: {}, // { producto_id: cantidad } para configurar pedido habitual del cliente
+  managerEditingClientId: null,
+  managerHabitualDraft: {}, // { producto_id: cantidad } cuando la encargada edita el pedido habitual de un cliente
+  waDraftItems: {},
   waUnmatchedLines: []
 };
 
@@ -32,6 +34,10 @@ function supaHeaders(extra = {}) {
     ...extra
   };
 }
+
+// ============================================================================
+// 1. CARGA Y SINCRONIZACIÓN CON SUPABASE + MODO OFFLINE
+// ============================================================================
 
 async function initApp() {
   loadLocalCache();
@@ -64,14 +70,14 @@ function loadLocalCache() {
     state.trazabilidad = parsed.trazabilidad || [];
     state.pendingSyncQueue = parsed.pendingSyncQueue || [];
   } catch (e) {
-    console.warn('No se pudo leer caché local:', e);
+    console.warn('Error leyendo caché local:', e);
   }
 }
 
 async function reloadFromSupabase(silent = false) {
   if (state.isOfflineSimulated) {
     updateSyncStatusUI();
-    if (!silent) showToast('📡 Estás en Modo Sin Internet (Campo). Usando datos guardados en el dispositivo.');
+    if (!silent) showToast('📡 Modo Sin Internet activo. Trabajando con datos locales.');
     return;
   }
 
@@ -82,7 +88,7 @@ async function reloadFromSupabase(silent = false) {
 
     const [resClientes, resProductos, resFrec, resPedidos, resDetalles, resTraza] = await Promise.all([
       fetch(`${SUPABASE_URL}/rest/v1/clientes?select=*&order=rol.desc,nombre_contacto.asc`, { headers: supaHeaders() }),
-      fetch(`${SUPABASE_URL}/rest/v1/productos?select=*&order=sku.asc`, { headers: supaHeaders() }),
+      fetch(`${SUPABASE_URL}/rest/v1/productos?select=*&order=created_at.asc`, { headers: supaHeaders() }),
       fetch(`${SUPABASE_URL}/rest/v1/cliente_productos_frecuentes?select=*`, { headers: supaHeaders() }),
       fetch(`${SUPABASE_URL}/rest/v1/pedidos?select=*&order=numero_pedido.desc`, { headers: supaHeaders() }),
       fetch(`${SUPABASE_URL}/rest/v1/pedido_detalle?select=*&order=created_at.asc`, { headers: supaHeaders() }),
@@ -103,12 +109,12 @@ async function reloadFromSupabase(silent = false) {
     renderAll();
 
     if (!silent) {
-      showToast('🟢 Datos actualizados en vivo desde Supabase (Proyecto YOGULE)');
+      showToast('🟢 Datos sincronizados con Supabase');
     }
   } catch (err) {
     console.error('Error conectando a Supabase:', err);
     updateSyncStatusUI(true);
-    if (!silent) showToast('⚠️ Sin conexión a Supabase, trabajando con respaldo local.');
+    if (!silent) showToast('⚠️ Sin conexión, usando datos guardados en el dispositivo.');
   }
 }
 
@@ -133,21 +139,23 @@ async function flushOfflineQueue() {
         });
       } else if (op.type === 'CREATE_ORDER') {
         await createOrderInSupabase(op.payload);
+      } else if (op.type === 'SAVE_HABITUAL') {
+        await persistClientHabitualInSupabase(op.cliente_id, op.draftMap);
       }
     } catch (e) {
-      console.error('Error sincronizando operación en cola:', e);
+      console.error('Error sincronizando cola:', e);
     }
   }
-  showToast(`☁️ ¡Se sincronizaron ${queueCopy.length} cambio(s) pendientes con Supabase!`);
+  showToast(`☁️ Se sincronizaron ${queueCopy.length} cambio(s) pendientes con Supabase.`);
 }
 
 function toggleOfflineMode() {
   state.isOfflineSimulated = !state.isOfflineSimulated;
   updateSyncStatusUI();
   if (state.isOfflineSimulated) {
-    showToast('📡 Modo Campo (Sin Internet) ACTIVADO. Todo lo que hagas se guardará en el celular y subirá al volver la señal.');
+    showToast('📡 Modo Sin Internet activado. Los cambios se guardan localmente.');
   } else {
-    showToast('🟢 Señal recuperada. Sincronizando cambios en segundo plano con Supabase...');
+    showToast('🟢 Conexión restaurada. Sincronizando con Supabase...');
     reloadFromSupabase(true);
   }
 }
@@ -160,16 +168,20 @@ function updateSyncStatusUI(hasError = false) {
 
   if (state.isOfflineSimulated || hasError) {
     pill.className = 'sync-pill offline';
-    text.textContent = `Modo Sin Internet (Campo) • ${qCount} cambio(s) en cola`;
-    btn.textContent = '🟢 Volver a Conectar Internet (Sincronizar)';
+    text.textContent = `Sin Internet • ${qCount} pendiente(s)`;
+    btn.textContent = '🟢 Reconectar y Sincronizar';
     btn.classList.add('active');
   } else {
     pill.className = 'sync-pill online';
-    text.textContent = `Supabase En Línea • Sincronizado (${state.pedidos.length} pedidos)`;
-    btn.textContent = '📡 Simular Modo Sin Internet (Campo)';
+    text.textContent = `Conectado a Supabase (${state.pedidos.length} pedidos)`;
+    btn.textContent = '📡 Simular Sin Internet';
     btn.classList.remove('active');
   }
 }
+
+// ============================================================================
+// 2. INICIO DE SESIÓN (TABLA CLIENTES SIN RLS)
+// ============================================================================
 
 async function handleManualLogin(e) {
   e.preventDefault();
@@ -193,17 +205,18 @@ async function loginWithCredentials(username, password) {
           setActiveUser(fullClient);
           return;
         } else {
-          showToast('❌ Usuario o contraseña incorrectos. Verifica tus datos.');
+          showToast('❌ Usuario o contraseña incorrectos.');
           return;
         }
       }
     } catch (err) {
-      console.warn('Fallo RPC login, usando validación local:', err);
+      console.warn('Usando login local:', err);
     }
   }
 
   const found = state.clientes.find(
-    c => c.usuario.toLowerCase() === username.toLowerCase() && (c.password_visible === password || password === '123456' || password === 'yogule123')
+    c => c.usuario.toLowerCase() === username.toLowerCase() &&
+         (c.password_visible === password || password === '123456' || password === 'yogule123')
   );
   if (!found) {
     showToast('❌ Usuario o contraseña incorrectos.');
@@ -215,24 +228,22 @@ async function loginWithCredentials(username, password) {
 function setActiveUser(userObj) {
   state.currentUser = userObj;
   state.clientCart = {};
+  initClientHabitualDraft(userObj.id);
 
   document.getElementById('loginView').style.display = 'none';
   document.getElementById('userSessionBox').style.display = 'flex';
   document.getElementById('sessionUserName').textContent = `${userObj.nombre_contacto} (${userObj.ciudad})`;
   document.getElementById('sessionUserRole').textContent =
-    userObj.rol === 'encargado' ? '👩‍💼 ENCARGADA PLANTA' : `🏪 CLIENTE • ${userObj.nombre_negocio}`;
+    userObj.rol === 'encargado' ? '👩‍💼 ENCARGADA' : `🏪 ${userObj.nombre_negocio}`;
 
   if (userObj.rol === 'encargado') {
     document.getElementById('managerView').style.display = 'block';
     document.getElementById('clientView').style.display = 'none';
     switchManagerTab('orders');
-    showToast(`👩‍💼 Bienvenida ${userObj.nombre_contacto}. Tienes el control nacional de pedidos Yogulé.`);
   } else {
     document.getElementById('managerView').style.display = 'none';
     document.getElementById('clientView').style.display = 'block';
-    document.getElementById('clientOrderAgency').value = userObj.agencia_preferida || 'Shalom';
     switchClientTab('newOrder');
-    showToast(`🏪 ¡Bienvenido(a) ${userObj.nombre_contacto}! Ya puedes hacer tu pedido directo a Planta Yogulé.`);
   }
   renderAll();
 }
@@ -251,7 +262,7 @@ function renderQuickLoginList() {
   if (!container) return;
 
   if (state.clientes.length === 0) {
-    container.innerHTML = `<div style="padding:14px; color:#64748b;">Cargando usuarios desde Supabase...</div>`;
+    container.innerHTML = `<div style="padding:12px; color:#64748b;">Cargando usuarios desde Supabase...</div>`;
     return;
   }
 
@@ -260,20 +271,24 @@ function renderQuickLoginList() {
     return `
       <button type="button" class="quick-login-item ${isManager ? 'manager' : ''}" onclick="loginWithCredentials('${c.usuario}', '${c.password_visible}')">
         <div>
-          <div style="font-weight: 800; font-size: 0.98rem; color: #0f172a;">
-            ${isManager ? '👩‍💼 ' : '🏪 '} ${c.nombre_contacto} — <span style="color: var(--yogule-pink);">${c.ciudad}</span>
+          <div style="font-weight: 800; font-size: 0.96rem; color: #0f172a;">
+            ${isManager ? '👩‍💼 ' : '🏪 '} ${c.nombre_contacto} (${c.ciudad})
           </div>
-          <div style="font-size: 0.84rem; color: #475569;">
+          <div style="font-size: 0.82rem; color: #475569;">
             ${c.nombre_negocio} • Usuario: <code>${c.usuario}</code> • Clave: <code>${c.password_visible}</code>
           </div>
         </div>
-        <span class="btn ${isManager ? 'btn-primary' : 'btn-outline'}" style="padding: 7px 13px; font-size: 0.84rem;">
+        <span class="btn ${isManager ? 'btn-primary' : 'btn-outline'}" style="padding: 6px 12px; font-size: 0.82rem;">
           Entrar ➔
         </span>
       </button>
     `;
   }).join('');
 }
+
+// ============================================================================
+// 3. PANEL ENCARGADA: TABLERO DE PEDIDOS Y TRAZABILIDAD (3 ESTADOS)
+// ============================================================================
 
 function switchManagerTab(tabName) {
   const tabs = ['orders', 'whatsapp', 'clients', 'products'];
@@ -311,7 +326,7 @@ function renderManagerOrders() {
   document.getElementById('countRecibido').textContent = countR;
   document.getElementById('countEntregado').textContent = countE;
   document.getElementById('countTodos').textContent = state.pedidos.length;
-  document.getElementById('badgePendingCount').textContent = `${countP} pendientes`;
+  document.getElementById('badgePendingCount').textContent = countP;
 
   const citySelect = document.getElementById('cityFilterSelect');
   const currentCity = citySelect.value || 'TODAS';
@@ -326,7 +341,7 @@ function renderManagerOrders() {
     if (state.orderFilter !== 'TODOS' && p.estado !== state.orderFilter) return false;
     if (currentCity !== 'TODAS' && client?.ciudad !== currentCity) return false;
     if (query) {
-      const haystack = `${p.codigo_pedido} ${client?.nombre_contacto || ''} ${client?.nombre_negocio || ''} ${client?.ciudad || ''} ${p.agencia_envio || ''}`.toLowerCase();
+      const haystack = `${p.codigo_pedido} ${client?.nombre_contacto || ''} ${client?.nombre_negocio || ''} ${client?.ciudad || ''} ${client?.direccion_entrega || ''}`.toLowerCase();
       if (!haystack.includes(query)) return false;
     }
     return true;
@@ -335,10 +350,8 @@ function renderManagerOrders() {
   const listEl = document.getElementById('managerOrdersList');
   if (filtered.length === 0) {
     listEl.innerHTML = `
-      <div class="card" style="text-align: center; padding: 34px;">
-        <div style="font-size: 2.5rem;">📭</div>
-        <h3 style="margin-top: 8px;">No hay pedidos en esta vista (${state.orderFilter})</h3>
-        <p style="color: #64748b; margin-top: 4px;">Puedes cambiar de filtro arriba o pegar un nuevo pedido desde WhatsApp.</p>
+      <div class="card" style="text-align: center; padding: 28px;">
+        <h3>No hay pedidos en estado ${state.orderFilter}</h3>
       </div>
     `;
     return;
@@ -349,9 +362,9 @@ function renderManagerOrders() {
 
 function renderOrderCardHTML(pedido, isManagerView) {
   const cliente = state.clientes.find(c => c.id === pedido.cliente_id) || {
-    nombre_contacto: 'Cliente Yogulé',
+    nombre_contacto: 'Cliente',
     nombre_negocio: '',
-    ciudad: 'Puno',
+    ciudad: '',
     telefono_whatsapp: ''
   };
   const registrador = state.clientes.find(c => c.id === pedido.registrado_por_id);
@@ -365,80 +378,56 @@ function renderOrderCardHTML(pedido, isManagerView) {
   const step2Done = pedido.estado === 'RECIBIDO' || pedido.estado === 'ENTREGADO';
   const step3Done = pedido.estado === 'ENTREGADO';
 
-  const originLabel =
-    pedido.origen === 'WHATSAPP_TEXTO'
-      ? '💬 Pegado de WhatsApp'
-      : pedido.origen === 'PORTAL_CLIENTE'
-      ? '📲 Pedido directo del Cliente (Con su Usuario)'
-      : '👩‍💼 Registrado por Encargada';
-
   return `
     <article class="order-card estado-${pedido.estado}">
       <div class="order-card-header">
         <div>
-          <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
             <span class="order-code-badge">${pedido.codigo_pedido}</span>
             <span class="status-badge ${pedido.estado}">
-              ${pedido.estado === 'PENDIENTE' ? '🟠 1. PENDIENTE (Falta alistar)' : pedido.estado === 'RECIBIDO' ? '🔵 2. RECIBIDO (Ya visto y alistado)' : '🟢 3. ENTREGADO AL CLIENTE'}
+              ${pedido.estado === 'PENDIENTE' ? '🟠 PENDIENTE' : pedido.estado === 'RECIBIDO' ? '🔵 RECIBIDO' : '🟢 ENTREGADO'}
             </span>
-            <span style="font-size: 0.84rem; background: #f1f5f9; padding: 4px 10px; border-radius: 999px; font-weight: 700; color: #475569;">
-              ${originLabel}
+            <span style="font-size: 0.82rem; color: #475569; font-weight: 700;">
+              📍 ${cliente.ciudad}${cliente.direccion_entrega ? ` • ${cliente.direccion_entrega}` : ''}
             </span>
           </div>
-          <h3 style="font-size: 1.22rem; margin-top: 8px; color: #0f172a;">
-            🏪 ${cliente.nombre_negocio} — <span style="color: var(--yogule-pink);">${cliente.nombre_contacto}</span>
+          <h3 style="font-size: 1.15rem; margin-top: 6px; color: #0f172a;">
+            ${cliente.nombre_negocio} — <span style="color: var(--yogule-pink);">${cliente.nombre_contacto}</span>
           </h3>
-          <div style="font-size: 0.92rem; color: #475569; margin-top: 2px;">
-            📍 <strong>Ciudad:</strong> ${cliente.ciudad} (${cliente.region || 'Perú'}) •
-            🚚 <strong>Agencia:</strong> ${pedido.agencia_envio || cliente.agencia_preferida || 'Por definir'} •
-            📞 <strong>WhatsApp:</strong> ${cliente.telefono_whatsapp} •
-            👤 <strong>Registrado por:</strong> ${registrador ? `${registrador.nombre_contacto} (${registrador.usuario})` : cliente.usuario}
+          <div style="font-size: 0.85rem; color: #64748b;">
+            📞 ${cliente.telefono_whatsapp} • Registrado por usuario: <code>${registrador ? registrador.usuario : cliente.usuario}</code>
           </div>
         </div>
 
         <div style="text-align: right;">
-          <div style="font-size: 0.80rem; font-weight: 800; color: #64748b;">MONTO TOTAL</div>
-          <div style="font-size: 1.65rem; font-weight: 900; color: var(--yogule-pink);">
+          <div style="font-size: 1.5rem; font-weight: 900; color: var(--yogule-pink);">
             S/ ${Number(pedido.total || 0).toFixed(2)}
           </div>
-          <div style="font-size: 0.80rem; color: #64748b;">
-            📅 ${formatDateTime(pedido.created_at)}
+          <div style="font-size: 0.78rem; color: #64748b;">
+            ${formatDateTime(pedido.created_at)}
           </div>
         </div>
       </div>
 
+      <!-- BARRA DE 3 ESTADOS -->
       <div class="trace-stepper">
         <div class="trace-step ${step1Done ? 'done' : ''}" style="${step1Done ? 'border: 2px solid var(--state-pendiente); color: #92400e;' : ''}">
-          <span class="trace-step-icon">🟠</span>
-          <span>1. PENDIENTE</span>
-          <small style="font-weight: 500; font-size: 0.76rem;">Pedido registrado</small>
+          <span>🟠 1. PENDIENTE</span>
         </div>
         <div class="trace-step ${step2Done ? 'done' : ''}" style="${step2Done ? 'border: 2px solid var(--state-recibido); color: #075985;' : ''}">
-          <span class="trace-step-icon">🔵</span>
-          <span>2. RECIBIDO</span>
-          <small style="font-weight: 500; font-size: 0.76rem;">Visto y alistado</small>
+          <span>🔵 2. RECIBIDO</span>
         </div>
         <div class="trace-step ${step3Done ? 'done' : ''}" style="${step3Done ? 'border: 2px solid var(--state-entregado); color: #166534;' : ''}">
-          <span class="trace-step-icon">🟢</span>
-          <span>3. ENTREGADO</span>
-          <small style="font-weight: 500; font-size: 0.76rem;">Producto entregado</small>
+          <span>🟢 3. ENTREGADO</span>
         </div>
       </div>
 
-      ${pedido.texto_whatsapp ? `
-        <div style="background: #dcfce7; border-left: 4px solid #16a34a; padding: 10px 14px; border-radius: 8px; margin-bottom: 12px; font-size: 0.90rem;">
-          <strong>💬 Mensaje original de WhatsApp guardado:</strong>
-          <div style="font-style: italic; color: #166534; margin-top: 2px;">"${pedido.texto_whatsapp}"</div>
-        </div>
-      ` : ''}
-
+      <!-- CHECKLIST DE PRODUCTOS DEL PEDIDO -->
       <div class="checklist-box">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
-          <strong style="font-size: 0.96rem;">
-            📦 Productos solicitados en este pedido (${items.length} sabores/ítems):
-          </strong>
-          <span style="font-weight: 800; font-size: 0.88rem; padding: 3px 10px; border-radius: 999px; background: ${allChecked ? '#dcfce7' : '#fee2e2'}; color: ${allChecked ? '#166534' : '#991b1b'};">
-            ${allChecked ? '✅ Todos los productos verificados en caja' : `⚠️ Alistados: ${totalItemsChecked} de ${items.length} (Toca cada fila al empacar)`}
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 6px;">
+          <strong style="font-size: 0.92rem;">Productos del pedido (${items.length}):</strong>
+          <span style="font-weight: 800; font-size: 0.82rem; padding: 2px 9px; border-radius: 999px; background: ${allChecked ? '#dcfce7' : '#fee2e2'}; color: ${allChecked ? '#166534' : '#991b1b'};">
+            ${allChecked ? '✓ Completo' : `Verificados: ${totalItemsChecked}/${items.length}`}
           </span>
         </div>
 
@@ -450,22 +439,17 @@ function renderOrderCardHTML(pedido, isManagerView) {
           };
           return `
             <div class="checklist-item ${item.alistado ? 'checked' : ''}" onclick="${isManagerView ? `toggleItemChecklist('${item.id}')` : ''}">
-              <div style="display: flex; align-items: center; gap: 12px;">
+              <div style="display: flex; align-items: center; gap: 10px;">
                 <div class="check-box-ui">${item.alistado ? '✓' : ''}</div>
                 <div>
-                  <div style="font-weight: 800; font-size: 1rem;">
-                    ${prod.icono_emoji || '🥛'} <span style="font-size: 1.12rem; color: var(--yogule-pink);">${item.cantidad} und.</span> × ${prod.nombre}
-                  </div>
-                  <div style="font-size: 0.82rem; color: #64748b;">
-                    ${prod.presentacion} • S/ ${Number(item.precio_unitario).toFixed(2)} c/u
+                  <div style="font-weight: 800; font-size: 0.96rem;">
+                    ${prod.icono_emoji || '🥛'} <span style="color: var(--yogule-pink);">${item.cantidad} und.</span> × ${prod.nombre}
+                    <small style="color: #64748b; font-weight: 600;">(${prod.presentacion})</small>
                   </div>
                 </div>
               </div>
-              <div style="text-align: right;">
-                <div style="font-weight: 800;">S/ ${Number(item.subtotal || item.cantidad * item.precio_unitario).toFixed(2)}</div>
-                <small style="color: ${item.alistado ? '#166534' : '#d97706'}; font-weight: 700;">
-                  ${item.alistado ? '✓ Alistado' : 'Falta alistar'}
-                </small>
+              <div style="font-weight: 800; font-size: 0.94rem;">
+                S/ ${Number(item.subtotal || item.cantidad * item.precio_unitario).toFixed(2)}
               </div>
             </div>
           `;
@@ -473,35 +457,30 @@ function renderOrderCardHTML(pedido, isManagerView) {
       </div>
 
       ${pedido.observaciones ? `
-        <div style="font-size: 0.90rem; color: #334155; margin-bottom: 12px; background: #fffbeb; padding: 9px 12px; border-radius: 8px; border: 1px solid #fde68a;">
-          📝 <strong>Observación:</strong> ${pedido.observaciones}
+        <div style="font-size: 0.86rem; color: #334155; margin-bottom: 10px; background: #fffbeb; padding: 8px 10px; border-radius: 8px;">
+          📝 ${pedido.observaciones}
         </div>
       ` : ''}
 
-      <div style="font-size: 0.84rem; color: #475569; margin-bottom: 14px; display: flex; flex-wrap: wrap; gap: 8px;">
+      <div style="font-size: 0.80rem; color: #475569; margin-bottom: 10px; display: flex; flex-wrap: wrap; gap: 6px;">
         ${trazas.map(t => `
-          <span style="background: #f1f5f9; padding: 5px 10px; border-radius: 8px; border: 1px solid #cbd5e1;">
-            <strong>${t.estado}:</strong> ${formatDateTime(t.created_at)} (${t.nota || t.responsable_nombre})
+          <span style="background: #f1f5f9; padding: 3px 8px; border-radius: 6px;">
+            <strong>${t.estado}:</strong> ${formatDateTime(t.created_at)}
           </span>
         `).join('')}
       </div>
 
       ${isManagerView ? `
-        <div style="display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; padding-top: 10px; border-top: 1px solid #e2e8f0;">
+        <div style="display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; padding-top: 8px; border-top: 1px solid #e2e8f0;">
           ${pedido.estado === 'PENDIENTE' ? `
-            <button class="btn btn-blue" style="flex: 1; min-width: 260px;" onclick="advanceOrderStatus('${pedido.id}', 'RECIBIDO')">
-              🔵 PASO 2: Marcar como RECIBIDO (Ya lo vi y alisté completo)
+            <button class="btn btn-blue" style="flex: 1;" onclick="advanceOrderStatus('${pedido.id}', 'RECIBIDO')">
+              🔵 Marcar como RECIBIDO (Ya visto / Alistado)
             </button>
           ` : ''}
           ${pedido.estado === 'RECIBIDO' ? `
-            <button class="btn btn-green" style="flex: 1; min-width: 260px;" onclick="advanceOrderStatus('${pedido.id}', 'ENTREGADO')">
-              🟢 PASO 3: Confirmar ENTREGADO al Cliente
+            <button class="btn btn-green" style="flex: 1;" onclick="advanceOrderStatus('${pedido.id}', 'ENTREGADO')">
+              🟢 Marcar como ENTREGADO al Cliente
             </button>
-          ` : ''}
-          ${pedido.estado === 'ENTREGADO' ? `
-            <div style="color: #166534; font-weight: 800; padding: 8px;">
-              ✅ Pedido finalizado y entregado correctamente.
-            </div>
           ` : ''}
         </div>
       ` : ''}
@@ -530,7 +509,7 @@ async function toggleItemChecklist(detalleId) {
       body: JSON.stringify({ alistado: item.alistado })
     });
   } catch (e) {
-    console.error('Error guardando check en Supabase:', e);
+    console.error(e);
   }
 }
 
@@ -556,15 +535,11 @@ async function advanceOrderStatus(pedidoId, nuevoEstado) {
 
   pedido.estado = nuevoEstado;
   const nowIso = new Date().toISOString();
-  if (nuevoEstado === 'RECIBIDO') pedido.recibido_at = nowIso;
-  if (nuevoEstado === 'ENTREGADO') pedido.entregado_at = nowIso;
-
   state.trazabilidad.push({
     id: 'local-' + Date.now(),
     pedido_id: pedidoId,
     estado: nuevoEstado,
-    responsable_nombre: state.currentUser?.nombre_contacto || 'Encargada Yogulé',
-    nota: nuevoEstado === 'RECIBIDO' ? 'Pedido visto y alistado en planta Yogulé' : 'Pedido entregado satisfactoriamente al cliente',
+    responsable_nombre: state.currentUser?.nombre_contacto || 'Encargada',
     created_at: nowIso
   });
 
@@ -580,7 +555,7 @@ async function advanceOrderStatus(pedidoId, nuevoEstado) {
     });
     saveLocalCache();
     updateSyncStatusUI();
-    showToast(`📡 Guardado en el celular: ${pedido.codigo_pedido} pasó a ${nuevoEstado} (Se sincronizará al volver internet).`);
+    showToast(`📡 ${pedido.codigo_pedido} marcado como ${nuevoEstado} en el dispositivo.`);
     return;
   }
 
@@ -594,20 +569,24 @@ async function advanceOrderStatus(pedidoId, nuevoEstado) {
       })
     });
     if (res.ok) {
-      showToast(`✅ Pedido ${pedido.codigo_pedido} actualizado a ${nuevoEstado} en Supabase.`);
+      showToast(`✅ ${pedido.codigo_pedido} pasó a ${nuevoEstado}`);
       await reloadFromSupabase(true);
     }
   } catch (e) {
-    console.error('Error actualizando estado en Supabase:', e);
+    console.error(e);
   }
 }
+
+// ============================================================================
+// 4. PARSER DE TEXTO DE WHATSAPP (COSTO $0)
+// ============================================================================
 
 function populateWaClientsSelect() {
   const select = document.getElementById('waClientSelect');
   if (!select) return;
   const onlyClients = state.clientes.filter(c => c.rol === 'cliente');
   select.innerHTML = onlyClients.map(c =>
-    `<option value="${c.id}">🏪 ${c.nombre_contacto} — ${c.nombre_negocio} (${c.ciudad})</option>`
+    `<option value="${c.id}">${c.nombre_contacto} — ${c.nombre_negocio} (${c.ciudad})</option>`
   ).join('');
   updateWaClientNeedsHint();
 }
@@ -619,7 +598,6 @@ function updateWaClientNeedsHint() {
   const client = state.clientes.find(c => c.id === select.value);
   if (!client) return;
 
-  document.getElementById('waAgencyInput').value = client.agencia_preferida || 'Shalom';
   const clientFrec = state.frecuentes.filter(f => f.cliente_id === client.id);
   const chips = clientFrec.map(f => {
     const p = state.productos.find(pr => pr.id === f.producto_id);
@@ -627,16 +605,15 @@ function updateWaClientNeedsHint() {
   }).join('');
 
   hint.innerHTML = `
-    <div><strong>💡 Qué suele necesitar ${client.nombre_contacto} (${client.ciudad}):</strong> ${client.notas_necesidades || 'Cliente frecuente'}</div>
-    <div style="margin-top: 6px;">${chips || 'Sin productos frecuentes registrados aún.'}</div>
+    <div><strong>⭐ Pedido habitual de ${client.nombre_contacto}:</strong> ${chips || 'No configurado aún'}</div>
   `;
 }
 
 function loadSampleWhatsApp(num) {
   const samples = {
-    1: 'Hola caserita Yogulé soy María de Arequipa, por favor envíame:\n20 yogurt fresa 1L\n15 durazno 1L\n12 sauco\n10 queso paria\nPor agencia Marvisur',
-    2: 'Buen día planta Yogulé habla Carlos de Cusco, mándame para mañana:\n24 sauco andino\n18 lucuma\n15 natural sin azucar\n3 cajas surtidas 10 sabores por Shalom',
-    3: 'Hola amiga Amelia soy Elena de Trujillo, apúntame:\n4 cajas surtidas\n25 fresa\n20 maracuya\n15 vainilla\n12 piña golden por Flores'
+    1: 'Hola Yogulé soy María de Arequipa, envíame:\n20 yogurt fresa 1L\n15 durazno 1L\n12 sauco\n10 queso paria',
+    2: 'Buen día habla Carlos de Cusco, mándame:\n24 sauco\n18 lucuma\n15 natural\n3 cajas surtidas',
+    3: 'Hola soy Elena de Trujillo, apúntame:\n4 cajas surtidas\n25 fresa\n20 maracuya\n15 vainilla\n12 piña'
   };
   document.getElementById('waRawText').value = samples[num] || samples[1];
   parseWhatsAppTextLive();
@@ -664,14 +641,6 @@ function parseWhatsAppTextLive() {
     }
   }
 
-  const agencies = ['Marvisur', 'Shalom', 'Flores', 'Olva', 'Cruz del Sur', 'Reparto Directo'];
-  for (const ag of agencies) {
-    if (normFull.includes(normalizeStr(ag))) {
-      document.getElementById('waAgencyInput').value = ag;
-      break;
-    }
-  }
-
   const segments = raw
     .split(/\n|,|\by\b/i)
     .map(s => s.trim())
@@ -679,6 +648,7 @@ function parseWhatsAppTextLive() {
 
   const detected = {};
   const unmatched = [];
+  const activeProducts = state.productos.filter(p => p.activo !== false);
 
   for (const seg of segments) {
     const normSeg = normalizeStr(seg);
@@ -689,7 +659,7 @@ function parseWhatsAppTextLive() {
     if (!qty || qty <= 0) continue;
 
     let matchedProd = null;
-    for (const prod of state.productos) {
+    for (const prod of activeProducts) {
       const keywords = [
         normalizeStr(prod.sabor),
         normalizeStr(prod.nombre),
@@ -732,9 +702,8 @@ function renderWaParsedPreview() {
   const entries = Object.entries(state.waDraftItems);
   if (entries.length === 0) {
     container.innerHTML = `
-      <div style="text-align: center; padding: 28px; color: #64748b; background: #f8fafc; border-radius: 12px;">
-        <div style="font-size: 2rem;">✍️</div>
-        <p style="margin-top: 6px;">Pega un mensaje de WhatsApp a la izquierda o toca uno de los botones de ejemplo.</p>
+      <div style="text-align: center; padding: 24px; color: #64748b; background: #f8fafc; border-radius: 12px;">
+        Pega el mensaje de WhatsApp a la izquierda para detectar los productos.
       </div>
     `;
     return;
@@ -748,45 +717,34 @@ function renderWaParsedPreview() {
     total += sub;
 
     return `
-      <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border-bottom: 1px solid #e2e8f0; gap: 10px;">
+      <div style="display: flex; align-items: center; justify-content: space-between; padding: 9px 12px; border-bottom: 1px solid #e2e8f0; gap: 10px;">
         <div>
-          <div style="font-weight: 800; font-size: 1rem;">
-            ${prod.icono_emoji} ${prod.nombre}
-          </div>
-          <div style="font-size: 0.82rem; color: #64748b;">
-            ${prod.presentacion} • S/ ${Number(prod.precio).toFixed(2)} c/u
+          <div style="font-weight: 800; font-size: 0.96rem;">
+            ${prod.icono_emoji} ${prod.nombre} <small style="color:#64748b;">(${prod.presentacion})</small>
           </div>
         </div>
         <div style="display: flex; align-items: center; gap: 10px;">
           <div class="qty-control">
-            <button type="button" class="qty-btn" style="width: 32px; height: 32px; font-size: 1.1rem;" onclick="adjustWaDraftQty('${prod.id}', -1)">−</button>
-            <span class="qty-val" style="min-width: 36px; font-size: 1.05rem;">${qty}</span>
-            <button type="button" class="qty-btn plus" style="width: 32px; height: 32px; font-size: 1.1rem;" onclick="adjustWaDraftQty('${prod.id}', 1)">+</button>
+            <button type="button" class="qty-btn" style="width: 30px; height: 30px; font-size: 1rem;" onclick="adjustWaDraftQty('${prod.id}', -1)">−</button>
+            <span class="qty-val" style="min-width: 34px; font-size: 1rem;">${qty}</span>
+            <button type="button" class="qty-btn plus" style="width: 30px; height: 30px; font-size: 1rem;" onclick="adjustWaDraftQty('${prod.id}', 1)">+</button>
           </div>
-          <strong style="min-width: 78px; text-align: right;">S/ ${sub.toFixed(2)}</strong>
+          <strong style="min-width: 72px; text-align: right;">S/ ${sub.toFixed(2)}</strong>
         </div>
       </div>
     `;
   }).join('');
 
-  const unmatchedHtml = state.waUnmatchedLines.length > 0 ? `
-    <div style="background: #fef3c7; border: 1px solid #f59e0b; color: #92400e; padding: 10px 12px; border-radius: 10px; margin-top: 12px; font-size: 0.88rem;">
-      ⚠️ <strong>Atención Encargada:</strong> Estas líneas tenían números pero no coincidieron con un sabor exacto:
-      <code>${state.waUnmatchedLines.join(' | ')}</code>
-    </div>
-  ` : '';
-
   container.innerHTML = `
     <div style="border: 2px solid #e2e8f0; border-radius: 12px; overflow: hidden;">
       ${rowsHtml}
-      <div style="background: #fdf2f8; padding: 14px 16px; display: flex; justify-content: space-between; align-items: center;">
-        <span style="font-weight: 800;">TOTAL DETECTADO (${entries.length} productos):</span>
-        <span style="font-size: 1.5rem; font-weight: 900; color: var(--yogule-pink);">S/ ${total.toFixed(2)}</span>
+      <div style="background: #fdf2f8; padding: 12px 14px; display: flex; justify-content: space-between; align-items: center;">
+        <span style="font-weight: 800;">TOTAL (${entries.length} ítems):</span>
+        <span style="font-size: 1.4rem; font-weight: 900; color: var(--yogule-pink);">S/ ${total.toFixed(2)}</span>
       </div>
     </div>
-    ${unmatchedHtml}
-    <button type="button" class="btn btn-green btn-block" style="margin-top: 16px; font-size: 1.08rem; padding: 15px;" onclick="saveWhatsAppOrder()">
-      ✅ Confirmar y Guardar Pedido en Estado PENDIENTE
+    <button type="button" class="btn btn-green btn-block" style="margin-top: 14px;" onclick="saveWhatsAppOrder()">
+      ✅ Registrar Pedido en Estado PENDIENTE
     </button>
   `;
 }
@@ -794,11 +752,10 @@ function renderWaParsedPreview() {
 async function saveWhatsAppOrder() {
   const clientId = document.getElementById('waClientSelect').value;
   const rawText = document.getElementById('waRawText').value.trim();
-  const agency = document.getElementById('waAgencyInput').value.trim() || 'Shalom';
   const entries = Object.entries(state.waDraftItems);
 
   if (!clientId || entries.length === 0) {
-    showToast('⚠️ Selecciona un cliente y asegúrate de que haya al menos 1 producto detectado.');
+    showToast('⚠️ Selecciona un cliente y al menos 1 producto.');
     return;
   }
 
@@ -815,9 +772,9 @@ async function saveWhatsAppOrder() {
     cliente_id: clientId,
     registrado_por_id: state.currentUser?.id || clientId,
     origen: 'WHATSAPP_TEXTO',
-    agencia_envio: agency,
+    agencia_envio: 'Reparto Directo Yogulé',
     texto_whatsapp: rawText,
-    observaciones: 'Copiado de WhatsApp con verificación automática de sabores.',
+    observaciones: '',
     items: itemsPayload
   });
 
@@ -826,6 +783,10 @@ async function saveWhatsAppOrder() {
   switchManagerTab('orders');
   setOrderFilter('PENDIENTE');
 }
+
+// ============================================================================
+// 5. REGISTRO DE PEDIDOS EN SUPABASE
+// ============================================================================
 
 async function registerNewOrder(payload) {
   if (state.isOfflineSimulated) {
@@ -866,8 +827,7 @@ async function registerNewOrder(payload) {
       id: `${tempId}-traza-1`,
       pedido_id: tempId,
       estado: 'PENDIENTE',
-      responsable_nombre: state.currentUser?.nombre_contacto || 'Usuario Yogulé',
-      nota: 'Registrado sin internet (Pendiente de sincronizar)',
+      responsable_nombre: state.currentUser?.nombre_contacto || 'Usuario',
       created_at: nowIso
     });
 
@@ -875,17 +835,16 @@ async function registerNewOrder(payload) {
     saveLocalCache();
     updateSyncStatusUI();
     renderAll();
-    showToast(`📡 Pedido ${code} guardado en el dispositivo (Estado: PENDIENTE). Se subirá a Supabase al recuperar internet.`);
+    showToast(`📡 Pedido ${code} guardado localmente (PENDIENTE).`);
     return;
   }
 
   try {
     const created = await createOrderInSupabase(payload);
-    showToast(`🎉 ¡Pedido ${created.codigo_pedido} registrado en Supabase con estado PENDIENTE!`);
+    showToast(`✅ Pedido ${created.codigo_pedido} registrado en estado PENDIENTE.`);
     await reloadFromSupabase(true);
   } catch (e) {
-    console.error('Error creando pedido en Supabase:', e);
-    showToast('⚠️ Error de red, activando guardado local...');
+    console.error(e);
   }
 }
 
@@ -904,7 +863,7 @@ async function createOrderInSupabase(payload) {
     })
   });
 
-  if (!resOrder.ok) throw new Error('No se pudo insertar en pedidos');
+  if (!resOrder.ok) throw new Error('Error insertando pedido');
   const [insertedOrder] = await resOrder.json();
 
   const detailRows = payload.items.map(it => ({
@@ -924,6 +883,10 @@ async function createOrderInSupabase(payload) {
   return insertedOrder;
 }
 
+// ============================================================================
+// 6. CARTERA DE CLIENTES + CONFIGURACIÓN DEL PEDIDO HABITUAL POR CLIENTE
+// ============================================================================
+
 function toggleNewClientForm() {
   const form = document.getElementById('newClientForm');
   form.style.display = form.style.display === 'none' ? 'block' : 'none';
@@ -937,7 +900,8 @@ async function handleCreateClient(e) {
     ciudad: document.getElementById('ncCity').value.trim(),
     region: document.getElementById('ncCity').value.trim(),
     telefono_whatsapp: document.getElementById('ncPhone').value.trim(),
-    agencia_preferida: document.getElementById('ncAgency').value.trim() || 'Shalom',
+    agencia_preferida: 'Reparto Directo Yogulé',
+    direccion_entrega: document.getElementById('ncAddress').value.trim(),
     notas_necesidades: document.getElementById('ncNotes').value.trim(),
     usuario: document.getElementById('ncUser').value.trim().toLowerCase(),
     password_hash: document.getElementById('ncPass').value.trim(),
@@ -952,10 +916,10 @@ async function handleCreateClient(e) {
       body: JSON.stringify(payload)
     });
     if (!res.ok) {
-      showToast('⚠️ Ese nombre de usuario ya existe. Elige otro.');
+      showToast('⚠️ Ese usuario ya existe. Elige otro.');
       return;
     }
-    showToast(`✅ Cliente ${payload.nombre_contacto} creado con usuario "${payload.usuario}" y clave "${payload.password_visible}".`);
+    showToast(`✅ Cliente ${payload.nombre_contacto} registrado.`);
     document.getElementById('newClientForm').reset();
     toggleNewClientForm();
     await reloadFromSupabase(true);
@@ -972,57 +936,49 @@ function renderClientsPortfolio() {
   grid.innerHTML = clients.map(c => {
     const frec = state.frecuentes.filter(f => f.cliente_id === c.id);
     const clientOrders = state.pedidos.filter(p => p.cliente_id === c.id);
-    const pendingOrders = clientOrders.filter(p => p.estado !== 'ENTREGADO').length;
 
     const chipsHtml = frec.map(f => {
       const prod = state.productos.find(p => p.id === f.producto_id);
-      return prod ? `<span class="need-chip">${prod.icono_emoji} <strong>${f.cantidad_habitual}</strong> × ${prod.sabor}</span>` : '';
+      return prod ? `<span class="need-chip">${prod.icono_emoji} <strong>${f.cantidad_habitual}</strong> × ${prod.nombre}</span>` : '';
     }).join('');
 
     return `
-      <div class="card" style="display: flex; flex-direction: column; justify-content: space-between;">
+      <div class="card" style="display: flex; flex-direction: column; justify-content: space-between; padding: 18px;">
         <div>
           <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;">
             <div>
-              <span style="background: var(--yogule-pink-light); color: var(--yogule-pink); font-weight: 900; font-size: 0.78rem; padding: 3px 9px; border-radius: 999px;">
-                📍 ${c.ciudad} • ${c.frecuencia_pedido || 'Semanal'}
+              <span style="background: var(--yogule-pink-light); color: var(--yogule-pink); font-weight: 800; font-size: 0.78rem; padding: 2px 8px; border-radius: 999px;">
+                📍 ${c.ciudad}
               </span>
-              <h3 style="font-size: 1.18rem; margin-top: 6px;">🏪 ${c.nombre_negocio}</h3>
-              <div style="color: #475569; font-weight: 700; font-size: 0.94rem;">👤 ${c.nombre_contacto}</div>
+              <h3 style="font-size: 1.12rem; margin-top: 6px;">🏪 ${c.nombre_negocio}</h3>
+              <div style="color: #475569; font-weight: 700; font-size: 0.92rem;">👤 ${c.nombre_contacto} • 📞 ${c.telefono_whatsapp}</div>
             </div>
             <span style="font-size: 0.78rem; font-weight: 800; background: #f1f5f9; padding: 4px 8px; border-radius: 6px;">
-              ${c.codigo_cliente || 'CLIENTE'}
+              ${clientOrders.length} pedido(s)
             </span>
           </div>
 
-          <div style="font-size: 0.88rem; color: #475569; margin-top: 10px;">
-            <div>📞 <strong>WhatsApp:</strong> ${c.telefono_whatsapp}</div>
-            <div>🚚 <strong>Agencia:</strong> ${c.agencia_preferida} (${c.direccion_entrega || c.ciudad})</div>
-            <div>📦 <strong>Pedidos registrados (FK):</strong> ${clientOrders.length} total (${pendingOrders} en curso)</div>
-          </div>
-
           <div class="client-needs-box">
-            <div style="font-weight: 800; font-size: 0.88rem; color: #92400e; margin-bottom: 4px;">
-              ⭐ ¿Qué necesita habitualmente este cliente?
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+              <strong style="font-size: 0.86rem; color: #92400e;">⭐ Pedido Habitual del Cliente:</strong>
+              <button type="button" class="btn btn-outline" style="padding: 3px 8px; font-size: 0.78rem;" onclick="openManagerHabitualEditor('${c.id}')">
+                ✏️ Definir / Editar
+              </button>
             </div>
-            <p style="font-size: 0.85rem; color: #78350f; margin-bottom: 6px;">
-              ${c.notas_necesidades || 'Pide surtido de los 10 sabores saludables.'}
-            </p>
-            <div>${chipsHtml || '<small>Sin productos habituales predefinidos</small>'}</div>
+            <div>${chipsHtml || '<small style="color:#78350f;">Sin productos definidos. Toca "Definir / Editar" para asignarlos.</small>'}</div>
           </div>
 
-          <div style="background: #f8fafc; border: 1px dashed #cbd5e1; padding: 10px 12px; border-radius: 10px; font-size: 0.86rem; margin-bottom: 12px;">
-            🔐 <strong>Credenciales del Cliente (Sin RLS):</strong><br/>
-            Usuario: <code>${c.usuario}</code> • Contraseña: <code>${c.password_visible}</code>
+          <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 8px 10px; border-radius: 8px; font-size: 0.84rem; margin-bottom: 12px;">
+            🔐 Usuario: <code>${c.usuario}</code> • Clave: <code>${c.password_visible}</code>
           </div>
         </div>
 
         <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-          <button class="btn btn-primary" style="flex: 1; padding: 10px; font-size: 0.88rem;" onclick="quickCreateHabitualOrderForClient('${c.id}')">
-            ⚡ Crear su Pedido Habitual (1 Clic)
+          <button class="btn btn-primary" style="flex: 1; padding: 9px; font-size: 0.86rem;" onclick="quickCreateHabitualOrderForClient('${c.id}')">
+            ⚡ Crear su Pedido Habitual
           </button>
-          <button class="btn btn-outline" style="padding: 10px; font-size: 0.88rem;" onclick="loginWithCredentials('${c.usuario}', '${c.password_visible}')">
-            👁️ Ver como este Cliente
+          <button class="btn btn-outline" style="padding: 9px; font-size: 0.86rem;" onclick="loginWithCredentials('${c.usuario}', '${c.password_visible}')">
+            👁️ Entrar como Cliente
           </button>
         </div>
       </div>
@@ -1030,12 +986,85 @@ function renderClientsPortfolio() {
   }).join('');
 }
 
+function openManagerHabitualEditor(clienteId) {
+  const client = state.clientes.find(c => c.id === clienteId);
+  if (!client) return;
+
+  state.managerEditingClientId = clienteId;
+  state.managerHabitualDraft = {};
+  state.frecuentes
+    .filter(f => f.cliente_id === clienteId)
+    .forEach(f => {
+      state.managerHabitualDraft[f.producto_id] = f.cantidad_habitual;
+    });
+
+  document.getElementById('managerHabitualEditorTitle').textContent =
+    `✏️ Configurar Pedido Habitual: ${client.nombre_negocio} (${client.nombre_contacto} - ${client.ciudad})`;
+  document.getElementById('managerHabitualEditorCard').style.display = 'block';
+  renderManagerHabitualEditorGrid();
+  document.getElementById('managerHabitualEditorCard').scrollIntoView({ behavior: 'smooth' });
+}
+
+function closeManagerHabitualEditor() {
+  state.managerEditingClientId = null;
+  document.getElementById('managerHabitualEditorCard').style.display = 'none';
+}
+
+function changeManagerHabitualQty(prodId, delta) {
+  const curr = state.managerHabitualDraft[prodId] || 0;
+  const next = Math.max(0, curr + delta);
+  if (next === 0) {
+    delete state.managerHabitualDraft[prodId];
+  } else {
+    state.managerHabitualDraft[prodId] = next;
+  }
+  renderManagerHabitualEditorGrid();
+}
+
+function renderManagerHabitualEditorGrid() {
+  const grid = document.getElementById('managerHabitualProductsGrid');
+  if (!grid) return;
+
+  const activeProducts = state.productos.filter(p => p.activo !== false);
+  grid.innerHTML = activeProducts.map(p => {
+    const qty = state.managerHabitualDraft[p.id] || 0;
+    return `
+      <div class="product-card" style="padding: 12px; border-color: ${qty > 0 ? 'var(--yogule-gold)' : 'var(--border-color)'}; background: ${qty > 0 ? '#ffffff' : '#f8fafc'};">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span style="font-size: 1.5rem;">${p.icono_emoji || '🥛'}</span>
+          <div>
+            <div style="font-weight: 800; font-size: 0.95rem;">${p.nombre}</div>
+            <div style="font-size: 0.80rem; color: #64748b;">${p.presentacion} • S/ ${Number(p.precio).toFixed(2)}</div>
+          </div>
+        </div>
+        <div class="qty-control">
+          <button type="button" class="qty-btn" style="width: 34px; height: 34px;" onclick="changeManagerHabitualQty('${p.id}', -1)">−</button>
+          <span class="qty-val" style="font-size: 1.05rem;">${qty}</span>
+          <button type="button" class="qty-btn plus" style="width: 34px; height: 34px;" onclick="changeManagerHabitualQty('${p.id}', 1)">+</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+async function saveManagerHabitualConfig() {
+  if (!state.managerEditingClientId) return;
+  await saveHabitualForClient(state.managerEditingClientId, state.managerHabitualDraft);
+  closeManagerHabitualEditor();
+}
+
 async function quickCreateHabitualOrderForClient(clienteId) {
   const client = state.clientes.find(c => c.id === clienteId);
   const frec = state.frecuentes.filter(f => f.cliente_id === clienteId);
   if (!client) return;
 
-  let items = frec.map(f => {
+  if (frec.length === 0) {
+    showToast('⚠️ Este cliente aún no tiene productos en su Pedido Habitual. Toca "Definir / Editar" primero.');
+    openManagerHabitualEditor(clienteId);
+    return;
+  }
+
+  const items = frec.map(f => {
     const prod = state.productos.find(p => p.id === f.producto_id);
     return {
       producto_id: f.producto_id,
@@ -1044,20 +1073,12 @@ async function quickCreateHabitualOrderForClient(clienteId) {
     };
   });
 
-  if (items.length === 0 && state.productos.length > 0) {
-    items = [{
-      producto_id: state.productos[0].id,
-      cantidad: 12,
-      precio_unitario: Number(state.productos[0].precio)
-    }];
-  }
-
   await registerNewOrder({
     cliente_id: client.id,
     registrado_por_id: state.currentUser?.id || client.id,
     origen: 'MANUAL_ENCARGADO',
-    agencia_envio: client.agencia_preferida || 'Shalom',
-    observaciones: `Pedido habitual generado desde la Cartera de Clientes para ${client.nombre_negocio}.`,
+    agencia_envio: 'Reparto Directo Yogulé',
+    observaciones: `Pedido habitual registrado para ${client.nombre_negocio}.`,
     items
   });
 
@@ -1065,97 +1086,252 @@ async function quickCreateHabitualOrderForClient(clienteId) {
   setOrderFilter('PENDIENTE');
 }
 
+// ============================================================================
+// 7. GESTIÓN DE PRODUCTOS POR LA ENCARGADA (SIN RUIDO NI STOCK, CON ALTA Y EDICIÓN)
+// ============================================================================
+
+function toggleNewProductForm() {
+  const form = document.getElementById('newProductForm');
+  form.style.display = form.style.display === 'none' ? 'block' : 'none';
+}
+
+async function handleCreateProduct(e) {
+  e.preventDefault();
+  const name = document.getElementById('npName').value.trim();
+  const flavor = document.getElementById('npFlavor').value.trim();
+  const presentation = document.getElementById('npPresentation').value.trim();
+  const line = document.getElementById('npLine').value;
+  const price = parseFloat(document.getElementById('npPrice').value) || 8.5;
+  const emoji = document.getElementById('npEmoji').value;
+
+  const skuSuffix = normalizeStr(flavor).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4) || 'PROD';
+  const sku = `YOG-${skuSuffix}-${Math.floor(100 + Math.random() * 900)}`;
+  const keywords = [normalizeStr(flavor), normalizeStr(name)].filter(Boolean);
+
+  const payload = {
+    sku,
+    nombre: name,
+    linea: line,
+    sabor: flavor,
+    presentacion: presentation,
+    precio: price,
+    icono_emoji: emoji,
+    palabras_clave: keywords,
+    activo: true
+  };
+
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/productos`, {
+      method: 'POST',
+      headers: supaHeaders({ 'Prefer': 'return=representation' }),
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) throw new Error('No se pudo crear el producto');
+    showToast(`✅ Producto "${name}" agregado al catálogo. Ya está visible para todos los clientes.`);
+    document.getElementById('newProductForm').reset();
+    toggleNewProductForm();
+    await reloadFromSupabase(true);
+  } catch (err) {
+    console.error(err);
+    showToast('⚠️ Error guardando el producto.');
+  }
+}
+
+async function updateProductPrice(prodId) {
+  const prod = state.productos.find(p => p.id === prodId);
+  if (!prod) return;
+  const inputEl = document.getElementById(`priceInput_${prodId}`);
+  const newPrice = parseFloat(inputEl?.value);
+  if (isNaN(newPrice) || newPrice < 0) {
+    showToast('⚠️ Ingresa un precio válido.');
+    return;
+  }
+
+  prod.precio = newPrice;
+  saveLocalCache();
+  renderAll();
+
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/productos?id=eq.${prodId}`, {
+      method: 'PATCH',
+      headers: supaHeaders(),
+      body: JSON.stringify({ precio: newPrice })
+    });
+    showToast(`✅ Precio de ${prod.nombre} actualizado a S/ ${newPrice.toFixed(2)}`);
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+async function toggleProductActive(prodId) {
+  const prod = state.productos.find(p => p.id === prodId);
+  if (!prod) return;
+  prod.activo = !prod.activo;
+  saveLocalCache();
+  renderAll();
+
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/productos?id=eq.${prodId}`, {
+      method: 'PATCH',
+      headers: supaHeaders(),
+      body: JSON.stringify({ activo: prod.activo })
+    });
+    showToast(prod.activo ? `✅ ${prod.nombre} visible para clientes` : `👁️ ${prod.nombre} oculto del catálogo`);
+  } catch (e) {
+    console.error(e);
+  }
+}
+
 function renderManagerProducts() {
   const grid = document.getElementById('managerProductsGrid');
   if (!grid) return;
 
   grid.innerHTML = state.productos.map(p => `
-    <div class="product-card" style="border-top: 6px solid ${p.color_hex || '#E91E63'};">
-      <div>
-        <div class="product-header">
-          <div class="product-emoji" style="background: ${p.color_hex}18;">
-            ${p.icono_emoji || '🥛'}
-          </div>
-          <div>
-            <span style="font-size: 0.74rem; font-weight: 800; color: #64748b;">${p.sku} • ${p.linea}</span>
-            <h4 style="font-size: 1.08rem; font-weight: 900;">${p.nombre}</h4>
-            <div style="font-size: 0.85rem; color: #475569;">${p.presentacion}</div>
-          </div>
+    <div class="product-card" style="opacity: ${p.activo === false ? '0.55' : '1'};">
+      <div class="product-header">
+        <div class="product-emoji" style="background: #f1f5f9;">
+          ${p.icono_emoji || '🥛'}
         </div>
-        <p style="font-size: 0.84rem; color: #475569; margin-top: 10px; background: #f8fafc; padding: 8px 10px; border-radius: 8px;">
-          ✨ ${p.beneficio || 'Leche de altura hecha delicia'}
-        </p>
+        <div style="flex: 1;">
+          <span style="font-size: 0.74rem; font-weight: 800; color: #64748b;">${p.linea}</span>
+          <h4 style="font-size: 1.02rem; font-weight: 900; color: #0f172a;">${p.nombre}</h4>
+          <div style="font-size: 0.84rem; color: #475569;">${p.presentacion}</div>
+        </div>
       </div>
-      <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 10px; border-top: 1px solid #e2e8f0;">
-        <div>
-          <small style="color: #64748b; font-weight: 700;">PRECIO MAYORISTA</small>
-          <div style="font-size: 1.35rem; font-weight: 900; color: var(--yogule-pink);">S/ ${Number(p.precio).toFixed(2)}</div>
+
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-top: 10px; border-top: 1px solid #e2e8f0;">
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <span style="font-weight: 800; font-size: 0.9rem;">S/</span>
+          <input
+            type="number"
+            step="0.10"
+            min="0"
+            id="priceInput_${p.id}"
+            class="form-input"
+            style="width: 86px; padding: 6px 8px; font-weight: 800;"
+            value="${Number(p.precio).toFixed(2)}"
+          />
+          <button type="button" class="btn btn-outline" style="padding: 6px 10px; font-size: 0.80rem;" onclick="updateProductPrice('${p.id}')">
+            Guardar
+          </button>
         </div>
-        <div style="text-align: right;">
-          <small style="color: #64748b; font-weight: 700;">STOCK PLANTA</small>
-          <div style="font-weight: 900; color: #166534;">${p.stock} und.</div>
-        </div>
+
+        <button
+          type="button"
+          class="btn ${p.activo === false ? 'btn-teal' : 'btn-outline'}"
+          style="padding: 6px 10px; font-size: 0.78rem;"
+          onclick="toggleProductActive('${p.id}')"
+        >
+          ${p.activo === false ? 'Activar' : 'Ocultar'}
+        </button>
       </div>
     </div>
   `).join('');
 }
 
+// ============================================================================
+// 8. PORTAL DEL CLIENTE + CONFIGURACIÓN DE SU PROPIO PEDIDO HABITUAL
+// ============================================================================
+
+function initClientHabitualDraft(clienteId) {
+  state.clientHabitualDraft = {};
+  state.frecuentes
+    .filter(f => f.cliente_id === clienteId)
+    .forEach(f => {
+      state.clientHabitualDraft[f.producto_id] = f.cantidad_habitual;
+    });
+}
+
 function switchClientTab(tab) {
-  const isNew = tab === 'newOrder';
-  document.getElementById('clientSectionNewOrder').style.display = isNew ? 'block' : 'none';
-  document.getElementById('clientSectionMyOrders').style.display = isNew ? 'none' : 'block';
-  document.getElementById('clientTabBtnOrder').classList.toggle('active', isNew);
-  document.getElementById('clientTabBtnHistory').classList.toggle('active', !isNew);
+  document.getElementById('clientSectionNewOrder').style.display = tab === 'newOrder' ? 'block' : 'none';
+  document.getElementById('clientSectionHabitualConfig').style.display = tab === 'habitualConfig' ? 'block' : 'none';
+  document.getElementById('clientSectionMyOrders').style.display = tab === 'myOrders' ? 'block' : 'none';
+
+  document.getElementById('clientTabBtnOrder').classList.toggle('active', tab === 'newOrder');
+  document.getElementById('clientTabBtnHabitual').classList.toggle('active', tab === 'habitualConfig');
+  document.getElementById('clientTabBtnHistory').classList.toggle('active', tab === 'myOrders');
+
+  if (tab === 'habitualConfig' && state.currentUser) {
+    initClientHabitualDraft(state.currentUser.id);
+  }
   renderClientPortal();
 }
 
 function renderClientPortal() {
   if (!state.currentUser) return;
 
+  const activeProducts = state.productos.filter(p => p.activo !== false);
+
   const frec = state.frecuentes.filter(f => f.cliente_id === state.currentUser.id);
-  const frecText = frec.map(f => {
+  const frecChips = frec.map(f => {
     const p = state.productos.find(pr => pr.id === f.producto_id);
-    return p ? `${p.icono_emoji} ${f.cantidad_habitual} ${p.sabor}` : '';
-  }).filter(Boolean).join('  •  ');
+    return p ? `<span class="need-chip">${p.icono_emoji} <strong>${f.cantidad_habitual}</strong> × ${p.nombre}</span>` : '';
+  }).filter(Boolean).join(' ');
 
   const summaryEl = document.getElementById('clientFrequentSummary');
   if (summaryEl) {
-    summaryEl.textContent = frecText
-      ? `Sabemos que en ${state.currentUser.nombre_negocio} siempre necesitas: ${frecText}.`
-      : `Elige las botellas de Yogurt Probio Yogulé que necesitas hoy para ${state.currentUser.ciudad}.`;
+    summaryEl.innerHTML = frecChips
+      ? frecChips
+      : `Aún no has definido tu pedido habitual. Toca <strong>"✏️ Configurar mi Pedido Habitual"</strong> para guardarlo.`;
   }
 
   const catalogEl = document.getElementById('clientProductsCatalog');
   if (catalogEl) {
-    catalogEl.innerHTML = state.productos.map(p => {
+    catalogEl.innerHTML = activeProducts.map(p => {
       const qty = state.clientCart[p.id] || 0;
       return `
-        <div class="product-card" style="border-color: ${qty > 0 ? 'var(--yogule-pink)' : 'var(--border-color)'}; border-width: ${qty > 0 ? '3px' : '2px'};">
-          <div>
-            <div class="product-header">
-              <div class="product-emoji" style="background: ${p.color_hex}20;">
-                ${p.icono_emoji || '🥛'}
-              </div>
-              <div>
-                <span style="font-size: 0.76rem; font-weight: 800; color: var(--yogule-teal);">${p.linea}</span>
-                <h4 style="font-size: 1.08rem; font-weight: 900;">${p.nombre}</h4>
-                <div style="font-size: 0.84rem; color: #64748b;">${p.presentacion}</div>
-              </div>
+        <div class="product-card" style="padding: 14px; border-color: ${qty > 0 ? 'var(--yogule-pink)' : 'var(--border-color)'}; border-width: ${qty > 0 ? '3px' : '2px'};">
+          <div class="product-header">
+            <div class="product-emoji" style="background: #f8fafc; width: 46px; height: 46px; font-size: 1.6rem;">
+              ${p.icono_emoji || '🥛'}
             </div>
-            <div style="margin-top: 10px; display: flex; justify-content: space-between; align-items: baseline;">
-              <span style="font-size: 1.35rem; font-weight: 900; color: var(--yogule-pink);">S/ ${Number(p.precio).toFixed(2)}</span>
-              <span style="font-size: 0.80rem; color: #64748b;">Stock disponible</span>
+            <div style="flex: 1;">
+              <h4 style="font-size: 1rem; font-weight: 900; color: #0f172a;">${p.nombre}</h4>
+              <div style="font-size: 0.82rem; color: #64748b;">${p.presentacion}</div>
+              <div style="font-size: 1.15rem; font-weight: 900; color: var(--yogule-pink); margin-top: 2px;">
+                S/ ${Number(p.precio).toFixed(2)}
+              </div>
             </div>
           </div>
 
           <div class="qty-control">
-            <button type="button" class="qty-btn" onclick="changeClientCartQty('${p.id}', -1)">−</button>
+            <button type="button" class="qty-btn" style="width: 38px; height: 38px;" onclick="changeClientCartQty('${p.id}', -1)">−</button>
             <span class="qty-val">${qty}</span>
-            <button type="button" class="qty-btn plus" onclick="changeClientCartQty('${p.id}', 1)">+</button>
+            <button type="button" class="qty-btn plus" style="width: 38px; height: 38px;" onclick="changeClientCartQty('${p.id}', 1)">+</button>
           </div>
           <div style="display: flex; gap: 6px;">
-            <button type="button" class="btn btn-outline" style="flex: 1; padding: 6px; font-size: 0.80rem;" onclick="changeClientCartQty('${p.id}', 6)">+6</button>
-            <button type="button" class="btn btn-outline" style="flex: 1; padding: 6px; font-size: 0.80rem;" onclick="changeClientCartQty('${p.id}', 12)">+12</button>
+            <button type="button" class="btn btn-outline" style="flex: 1; padding: 5px; font-size: 0.78rem;" onclick="changeClientCartQty('${p.id}', 6)">+6</button>
+            <button type="button" class="btn btn-outline" style="flex: 1; padding: 5px; font-size: 0.78rem;" onclick="changeClientCartQty('${p.id}', 12)">+12</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  const habitualGridEl = document.getElementById('clientHabitualProductsGrid');
+  if (habitualGridEl) {
+    habitualGridEl.innerHTML = activeProducts.map(p => {
+      const qty = state.clientHabitualDraft[p.id] || 0;
+      return `
+        <div class="product-card" style="padding: 14px; border-color: ${qty > 0 ? 'var(--yogule-gold)' : 'var(--border-color)'}; border-width: ${qty > 0 ? '3px' : '2px'};">
+          <div class="product-header">
+            <div class="product-emoji" style="background: #fffdf5; width: 46px; height: 46px; font-size: 1.6rem;">
+              ${p.icono_emoji || '🥛'}
+            </div>
+            <div style="flex: 1;">
+              <h4 style="font-size: 1rem; font-weight: 900;">${p.nombre}</h4>
+              <div style="font-size: 0.82rem; color: #64748b;">${p.presentacion} • S/ ${Number(p.precio).toFixed(2)}</div>
+            </div>
+          </div>
+
+          <div class="qty-control">
+            <button type="button" class="qty-btn" style="width: 38px; height: 38px;" onclick="changeClientHabitualDraftQty('${p.id}', -1)">−</button>
+            <span class="qty-val">${qty}</span>
+            <button type="button" class="qty-btn plus" style="width: 38px; height: 38px;" onclick="changeClientHabitualDraftQty('${p.id}', 1)">+</button>
+          </div>
+          <div style="display: flex; gap: 6px;">
+            <button type="button" class="btn btn-outline" style="flex: 1; padding: 5px; font-size: 0.78rem;" onclick="changeClientHabitualDraftQty('${p.id}', 6)">+6</button>
+            <button type="button" class="btn btn-outline" style="flex: 1; padding: 5px; font-size: 0.78rem;" onclick="changeClientHabitualDraftQty('${p.id}', 12)">+12</button>
           </div>
         </div>
       `;
@@ -1170,16 +1346,9 @@ function renderClientPortal() {
 
   const myOrdersList = document.getElementById('clientMyOrdersList');
   if (myOrdersList) {
-    if (myOrders.length === 0) {
-      myOrdersList.innerHTML = `
-        <div class="card" style="text-align: center; padding: 30px;">
-          <h3>Aún no tienes pedidos registrados</h3>
-          <p style="color: #64748b;">Ve a la pestaña "1. Hacer mi Pedido Yogulé" para enviar tu primer pedido.</p>
-        </div>
-      `;
-    } else {
-      myOrdersList.innerHTML = myOrders.map(o => renderOrderCardHTML(o, false)).join('');
-    }
+    myOrdersList.innerHTML = myOrders.length === 0
+      ? `<div class="card" style="text-align: center; padding: 24px;">Aún no tienes pedidos registrados.</div>`
+      : myOrders.map(o => renderOrderCardHTML(o, false)).join('');
   }
 }
 
@@ -1194,18 +1363,102 @@ function changeClientCartQty(prodId, delta) {
   renderClientPortal();
 }
 
+function changeClientHabitualDraftQty(prodId, delta) {
+  const curr = state.clientHabitualDraft[prodId] || 0;
+  const next = curr + delta;
+  if (next <= 0) {
+    delete state.clientHabitualDraft[prodId];
+  } else {
+    state.clientHabitualDraft[prodId] = next;
+  }
+  renderClientPortal();
+}
+
+async function saveClientHabitualConfig() {
+  if (!state.currentUser) return;
+  await saveHabitualForClient(state.currentUser.id, state.clientHabitualDraft);
+  switchClientTab('newOrder');
+}
+
+async function saveCurrentCartAsHabitual() {
+  if (!state.currentUser) return;
+  const entries = Object.entries(state.clientCart);
+  if (entries.length === 0) return;
+  await saveHabitualForClient(state.currentUser.id, { ...state.clientCart });
+}
+
+async function saveHabitualForClient(clienteId, draftMap) {
+  state.frecuentes = state.frecuentes.filter(f => f.cliente_id !== clienteId);
+  Object.entries(draftMap).forEach(([prodId, qty]) => {
+    if (qty > 0) {
+      state.frecuentes.push({
+        id: 'local-frec-' + Date.now() + '-' + prodId,
+        cliente_id: clienteId,
+        producto_id: prodId,
+        cantidad_habitual: qty,
+        nota: 'Configurado por usuario'
+      });
+    }
+  });
+  saveLocalCache();
+  renderAll();
+
+  if (state.isOfflineSimulated) {
+    state.pendingSyncQueue.push({ type: 'SAVE_HABITUAL', cliente_id: clienteId, draftMap });
+    saveLocalCache();
+    updateSyncStatusUI();
+    showToast('⭐ Pedido Habitual guardado en el dispositivo (se sincronizará al volver internet).');
+    return;
+  }
+
+  try {
+    await persistClientHabitualInSupabase(clienteId, draftMap);
+    showToast('⭐ ¡Pedido Habitual guardado en Supabase! Ahora puedes cargarlo con 1 solo clic.');
+    await reloadFromSupabase(true);
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+async function persistClientHabitualInSupabase(clienteId, draftMap) {
+  await fetch(`${SUPABASE_URL}/rest/v1/cliente_productos_frecuentes?cliente_id=eq.${clienteId}`, {
+    method: 'DELETE',
+    headers: supaHeaders()
+  });
+
+  const rows = Object.entries(draftMap)
+    .filter(([, qty]) => qty > 0)
+    .map(([prodId, qty]) => ({
+      cliente_id: clienteId,
+      producto_id: prodId,
+      cantidad_habitual: qty,
+      nota: 'Pedido habitual definido'
+    }));
+
+  if (rows.length > 0) {
+    await fetch(`${SUPABASE_URL}/rest/v1/cliente_productos_frecuentes`, {
+      method: 'POST',
+      headers: supaHeaders(),
+      body: JSON.stringify(rows)
+    });
+  }
+}
+
 function loadClientFrequentItemsToCart() {
   if (!state.currentUser) return;
   const frec = state.frecuentes.filter(f => f.cliente_id === state.currentUser.id);
   if (frec.length === 0) {
-    state.productos.slice(0, 3).forEach(p => { state.clientCart[p.id] = 10; });
-  } else {
-    frec.forEach(f => {
-      state.clientCart[f.producto_id] = f.cantidad_habitual;
-    });
+    showToast('⚠️ Primero define qué productos sueles pedir en "⭐ Configurar mi Pedido Habitual".');
+    switchClientTab('habitualConfig');
+    return;
   }
+
+  state.clientCart = {};
+  frec.forEach(f => {
+    state.clientCart[f.producto_id] = f.cantidad_habitual;
+  });
   renderClientPortal();
-  showToast('⚡ ¡Listo! Se cargaron tus productos habituales. Revisa y presiona el botón verde para enviar.');
+  showToast('⚡ Tu Pedido Habitual se cargó al carrito.');
 }
 
 function renderClientCartSummary() {
@@ -1216,7 +1469,7 @@ function renderClientCartSummary() {
   const submitArea = document.getElementById('clientCartSubmitArea');
 
   if (entries.length === 0) {
-    textEl.textContent = 'Aún no has elegido productos. Toca los botones [+] abajo o "Cargar lo que siempre pido".';
+    textEl.textContent = 'Selecciona las cantidades abajo o toca "Cargar mi Pedido Habitual".';
     totalEl.textContent = 'S/ 0.00';
     detailEl.innerHTML = '';
     submitArea.style.display = 'none';
@@ -1230,10 +1483,10 @@ function renderClientCartSummary() {
     if (!p) return '';
     total += qty * Number(p.precio);
     totalUnits += qty;
-    return `<span class="need-chip" style="font-size: 0.92rem; padding: 6px 12px;">${p.icono_emoji} <strong>${qty}</strong> × ${p.nombre} (S/ ${(qty * p.precio).toFixed(2)})</span>`;
+    return `<span class="need-chip" style="font-size: 0.90rem; padding: 5px 10px;">${p.icono_emoji} <strong>${qty}</strong> × ${p.nombre} (S/ ${(qty * p.precio).toFixed(2)})</span>`;
   }).join('');
 
-  textEl.textContent = `Estás pidiendo ${entries.length} sabores (${totalUnits} unidades en total):`;
+  textEl.textContent = `${entries.length} producto(s) seleccionados (${totalUnits} unidades):`;
   totalEl.textContent = `S/ ${total.toFixed(2)}`;
   detailEl.innerHTML = chips;
   submitArea.style.display = 'block';
@@ -1244,7 +1497,6 @@ async function submitClientOrder() {
   const entries = Object.entries(state.clientCart);
   if (entries.length === 0) return;
 
-  const agency = document.getElementById('clientOrderAgency').value.trim() || state.currentUser.agencia_preferida || 'Shalom';
   const notes = document.getElementById('clientOrderNotes').value.trim();
 
   const itemsPayload = entries.map(([prodId, qty]) => {
@@ -1260,8 +1512,8 @@ async function submitClientOrder() {
     cliente_id: state.currentUser.id,
     registrado_por_id: state.currentUser.id,
     origen: 'PORTAL_CLIENTE',
-    agencia_envio: agency,
-    observaciones: notes || `Pedido enviado por ${state.currentUser.nombre_contacto} desde su Portal Cliente.`,
+    agencia_envio: 'Reparto Directo Yogulé',
+    observaciones: notes,
     items: itemsPayload
   });
 
@@ -1269,6 +1521,10 @@ async function submitClientOrder() {
   document.getElementById('clientOrderNotes').value = '';
   switchClientTab('myOrders');
 }
+
+// ============================================================================
+// 9. UTILIDADES UI
+// ============================================================================
 
 function setViewportMode(mode) {
   const wrapper = document.getElementById('viewportWrapper');
@@ -1315,7 +1571,7 @@ function showToast(msg) {
   container.appendChild(el);
   setTimeout(() => {
     el.remove();
-  }, 4500);
+  }, 4000);
 }
 
 function renderAll() {
