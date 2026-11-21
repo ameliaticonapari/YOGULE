@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>YOGULÉ • Sistema de Pedidos y Trazabilidad Nacional</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+  <!-- BARRA SUPERIOR DE CONTROL DEL PROTOTIPO (Sincronización en vivo con Supabase + Vista Celular/PC + Guía Capacitación) -->
+  <div class="proto-topbar">
+    <div class="proto-topbar-left">
+      <span id="syncStatusPill" class="sync-pill online">
+        <span class="sync-dot"></span>
+        <span id="syncStatusText">Supabase En Línea • Sincronizado</span>
+      </span>
+      <button class="proto-btn" onclick="toggleOfflineMode()" id="btnOfflineToggle" title="Simular ir a una zona sin internet">
+        📡 Simular Modo Sin Internet (Campo)
+      </button>
+      <button class="proto-btn" onclick="reloadFromSupabase()" title="Recargar datos reales desde Supabase">
+        🔄 Actualizar desde Supabase
+      </button>
+    </div>
+    <div class="proto-topbar-right">
+      <button class="proto-btn" onclick="toggleTrainingGuide()" id="btnTrainingGuide">
+        🎓 Ver Guía de Capacitación
+      </button>
+      <button class="proto-btn active" id="btnViewDesktop" onclick="setViewportMode('desktop')">
+        💻 Vista Computadora
+      </button>
+      <button class="proto-btn" id="btnViewMobile" onclick="setViewportMode('mobile')">
+        📱 Vista Celular (APK)
+      </button>
+    </div>
+  </div>
+
+  <div id="viewportWrapper" class="viewport-wrapper">
+
+    <!-- CABECERA OFICIAL DE AGROINDUSTRIA YOGULÉ S.A.C. -->
+    <header class="brand-header">
+      <div class="brand-identity">
+        <img src="assets/logo-yogule.jpg" alt="Logo Oficial Yogulé" class="brand-logo" />
+        <div class="brand-titles">
+          <h1>
+            YOGULÉ
+            <span class="brand-badge-gold">Leche de altura hecha delicia</span>
+          </h1>
+          <p>Agroindustria Yogulé S.A.C. • Cabana, San Román - Puno • Trazabilidad Nacional de Pedidos</p>
+        </div>
+      </div>
+
+      <div id="userSessionBox" class="user-session-box" style="display: none;">
+        <div class="user-session-info">
+          <div id="sessionUserName" class="user-session-name">Encargada</div>
+          <span id="sessionUserRole" class="user-session-role">ENCARGADO</span>
+        </div>
+        <button class="btn btn-outline" style="padding: 8px 14px; font-size: 0.88rem;" onclick="logout()">
+          🚪 Cambiar Usuario
+        </button>
+      </div>
+    </header>
+
+    <!-- GUÍA VISUAL DE CAPACITACIÓN (Para personal sin conocimientos técnicos) -->
+    <section id="trainingGuideSection" class="training-guide">
+      <div class="training-guide-header">
+        <h2>🎓 Guía Fácil en 3 Pasos (Para Capacitación del Personal y Clientes)</h2>
+        <button class="btn btn-outline" style="padding: 6px 12px; font-size: 0.85rem;" onclick="toggleTrainingGuide()">
+          Ocultar Guía ✕
+        </button>
+      </div>
+      <div class="training-steps-grid">
+        <div class="training-step-card">
+          <div class="training-step-num">1</div>
+          <div>
+            <strong>🟠 PENDIENTE (Llega el Pedido)</strong>
+            <p style="font-size: 0.9rem; color: #475569;">
+              El cliente entra con su <b>Usuario y Contraseña</b> y pide, o la encargada <b>pega el mensaje de WhatsApp</b> ($0 costo). Supabase le asigna código único (ej. <code>YOG-00001</code>).
+            </p>
+          </div>
+        </div>
+        <div class="training-step-card">
+          <div class="training-step-num">2</div>
+          <div>
+            <strong>🔵 RECIBIDO (Alistado sin Olvidos)</strong>
+            <p style="font-size: 0.9rem; color: #475569;">
+              La encargada abre el pedido, <b>marca con un check (✓) cada sabor</b> mientras arma las cajas para no olvidar nada, y presiona el botón azul <b>"Marcar RECIBIDO"</b>.
+            </p>
+          </div>
+        </div>
+        <div class="training-step-card">
+          <div class="training-step-num">3</div>
+          <div>
+            <strong>🟢 ENTREGADO (Cierre Completo)</strong>
+            <p style="font-size: 0.9rem; color: #475569;">
+              Cuando el pedido llega al cliente, se presiona el botón verde <b>"Marcar ENTREGADO"</b>. Queda registrada la fecha y hora exacta de los 3 pasos.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================================================================
+         PANTALLA 1: INICIO DE SESIÓN (USUARIO Y CONTRASEÑA SIN RLS)
+         ====================================================================== -->
+    <main id="loginView">
+      <div class="login-container">
+        <!-- Formulario Grande de Usuario y Contraseña -->
+        <div class="card">
+          <div class="card-title">🔐 Ingresar al Sistema Yogulé</div>
+          <p class="card-subtitle">
+            Ingresa con tu <strong>Usuario y Contraseña</strong> asignados por Agroindustria Yogulé (conectado en vivo a la tabla <code>clientes</code> de Supabase sin RLS).
+          </p>
+
+          <form onsubmit="handleManualLogin(event)">
+            <div class="form-group">
+              <label class="form-label" for="loginUsername">👤 Usuario</label>
+              <input
+                type="text"
+                id="loginUsername"
+                class="form-input"
+                placeholder="Ejemplo: maria_arequipa o encargada"
+                required
+              />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="loginPassword">🔑 Contraseña</label>
+              <input
+                type="password"
+                id="loginPassword"
+                class="form-input"
+                placeholder="Ingresa tu contraseña"
+                required
+              />
+            </div>
+            <button type="submit" class="btn btn-primary btn-block">
+              ✅ Entrar Ahora
+            </button>
+          </form>
+
+          <div class="promo-10-banner" style="margin-top: 20px; margin-bottom: 0;">
+            <div style="flex: 1; min-width: 180px;">
+              <div style="font-weight: 900; font-size: 1.05rem;">🥛 Único con 10 Sabores Saludables</div>
+              <p style="font-size: 0.88rem; opacity: 0.95; margin-top: 4px;">
+                Yogurt Probio Yogulé 1000 cc • Ayuda a que no te enfermes, mejores tu digestión y absorbas mejor tus alimentos.
+              </p>
+            </div>
+            <img src="assets/yogurt-probio-fresa.jpg" alt="Yogurt Probio Yogulé 10 Sabores" class="promo-10-img" />
+          </div>
+        </div>
+
+        <!-- Acceso Rápido en 1 Clic para Pruebas y Capacitación -->
+        <div class="card">
+          <div class="card-title">⚡ Acceso Rápido en 1 Clic (Para Pruebas y Capacitación)</div>
+          <p class="card-subtitle">
+            Toca cualquiera de estas cuentas reales creadas en tu base de datos de Supabase para probar cómo lo ve la <strong>Encargada</strong> o cómo lo ve cada <strong>Cliente</strong>:
+          </p>
+          <div id="quickLoginList" class="quick-login-list">
+            <!-- Se llena dinámicamente desde Supabase / estado local -->
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- ======================================================================
+         PANTALLA 2: PANEL DE LA ENCARGADA (PLANTA CABANA / JULIACA)
+         ====================================================================== -->
+    <main id="managerView" style="display: none;">
+
+      <!-- Pestañas Grandes con Iconos -->
+      <nav class="main-nav">
+        <button class="nav-tab active" id="tabBtnOrders" onclick="switchManagerTab('orders')">
+          📋 1. Pedidos y Trazabilidad
+          <span id="badgePendingCount" class="nav-badge">0</span>
+        </button>
+        <button class="nav-tab" id="tabBtnWhatsapp" onclick="switchManagerTab('whatsapp')">
+          💬 2. Pegar de WhatsApp ($0)
+        </button>
+        <button class="nav-tab" id="tabBtnClients" onclick="switchManagerTab('clients')">
+          👥 3. Cartera de Clientes
+        </button>
+        <button class="nav-tab" id="tabBtnProducts" onclick="switchManagerTab('products')">
+          🥛 4. Productos Yogulé (10 Sabores)
+        </button>
+      </nav>
+
+      <!-- SUB-VISTA A: TABLERO DE PEDIDOS Y TRAZABILIDAD EN 3 ESTADOS -->
+      <section id="managerTabOrders">
+        <!-- Semáforo Grande de 3 Estados -->
+        <div class="status-semaphore-grid">
+          <div class="semaphore-card pendiente selected" id="filterCardPENDIENTE" onclick="setOrderFilter('PENDIENTE')">
+            <span class="semaphore-count" id="countPendiente">0</span>
+            <span class="semaphore-label">🟠 1. PENDIENTE</span>
+            <span class="semaphore-desc">Pedidos nuevos por alistar</span>
+          </div>
+          <div class="semaphore-card recibido" id="filterCardRECIBIDO" onclick="setOrderFilter('RECIBIDO')">
+            <span class="semaphore-count" id="countRecibido">0</span>
+            <span class="semaphore-label">🔵 2. RECIBIDO</span>
+            <span class="semaphore-desc">Ya vistos y alistados por encargado</span>
+          </div>
+          <div class="semaphore-card entregado" id="filterCardENTREGADO" onclick="setOrderFilter('ENTREGADO')">
+            <span class="semaphore-count" id="countEntregado">0</span>
+            <span class="semaphore-label">🟢 3. ENTREGADO</span>
+            <span class="semaphore-desc">Ya entregados al cliente</span>
+          </div>
+          <div class="semaphore-card todos" id="filterCardTODOS" onclick="setOrderFilter('TODOS')">
+            <span class="semaphore-count" id="countTodos">0</span>
+            <span class="semaphore-label">🌎 VER TODOS</span>
+            <span class="semaphore-desc">Historial completo nacional</span>
+          </div>
+        </div>
+
+        <!-- Barra de filtro por Ciudad y Buscador -->
+        <div class="card" style="margin-bottom: 16px; padding: 14px 18px;">
+          <div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between;">
+            <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center; flex: 1;">
+              <strong>🔍 Buscar Pedido o Cliente:</strong>
+              <input
+                type="text"
+                id="searchOrdersInput"
+                class="form-input"
+                style="max-width: 280px; padding: 9px 12px;"
+                placeholder="Código YOG-00001, nombre o ciudad..."
+                oninput="renderManagerOrders()"
+              />
+              <select id="cityFilterSelect" class="form-select" style="max-width: 200px; padding: 9px 12px;" onchange="renderManagerOrders()">
+                <option value="TODAS">📍 Todas las ciudades</option>
+              </select>
+            </div>
+            <button class="btn btn-teal" onclick="switchManagerTab('whatsapp')">
+              ➕ Registrar Pedido de WhatsApp
+            </button>
+          </div>
+        </div>
+
+        <!-- Lista de Tarjetas de Pedidos con Checklist Anti-Olvido y Botón Gigante de Siguiente Estado -->
+        <div id="managerOrdersList" class="orders-list"></div>
+      </section>
+
+      <!-- SUB-VISTA B: ASISTENTE PEGAR TEXTO DE WHATSAPP (COSTO $0, SIN IA DE PAGO) -->
+      <section id="managerTabWhatsapp" style="display: none;">
+        <div class="login-container">
+          <div class="card">
+            <div class="card-title">💬 Pegar Mensaje de WhatsApp (100% Gratis • Sin Errores)</div>
+            <p class="card-subtitle">
+              Cuando un cliente sigue pidiendo por WhatsApp, <strong>copia su mensaje y pégalo aquí</strong>. El sistema detecta cada sabor de Yogulé y las cantidades sin olvidar ningún producto.
+            </p>
+
+            <div style="margin-bottom: 14px;">
+              <span style="font-size: 0.88rem; font-weight: 800; color: #475569;">📋 Toca un mensaje de ejemplo para probar cómo lo lee:</span>
+              <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px;">
+                <button type="button" class="btn btn-outline" style="padding: 7px 11px; font-size: 0.84rem;" onclick="loadSampleWhatsApp(1)">
+                  Ejemplo 1: María (Arequipa)
+                </button>
+                <button type="button" class="btn btn-outline" style="padding: 7px 11px; font-size: 0.84rem;" onclick="loadSampleWhatsApp(2)">
+                  Ejemplo 2: Carlos (Cusco)
+                </button>
+                <button type="button" class="btn btn-outline" style="padding: 7px 11px; font-size: 0.84rem;" onclick="loadSampleWhatsApp(3)">
+                  Ejemplo 3: Elena (Trujillo)
+                </button>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">1. Selecciona el Cliente (o deja que se detecte solo):</label>
+              <select id="waClientSelect" class="form-select" onchange="updateWaClientNeedsHint()"></select>
+              <div id="waClientNeedsHint" class="client-needs-box" style="margin-top: 8px; font-size: 0.88rem;"></div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">2. Pega aquí el texto que mandó el cliente por WhatsApp:</label>
+              <textarea
+                id="waRawText"
+                class="form-textarea"
+                rows="5"
+                placeholder="Ejemplo: Hola Yogulé soy María de Arequipa, mándame 20 fresa, 15 durazno, 12 sauco y 8 queso paria por Marvisur"
+                oninput="parseWhatsAppTextLive()"
+              ></textarea>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">3. Agencia o Nota de Entrega:</label>
+              <input type="text" id="waAgencyInput" class="form-input" placeholder="Ej. Marvisur, Shalom, Flores o Reparto Directo" />
+            </div>
+          </div>
+
+          <!-- Resultado Detectado al Instante -->
+          <div class="card">
+            <div class="card-title">✅ Productos Yogulé Detectados del Mensaje</div>
+            <p class="card-subtitle">
+              Revisa que todo esté completo antes de guardar. También puedes ajustar cantidades con <code>[-]</code> y <code>[+]</code>:
+            </p>
+
+            <div id="waParsedPreview"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SUB-VISTA C: CARTERA DE CLIENTES ("QUÉ NECESITA CADA CLIENTE" + USUARIO Y CONTRASEÑA) -->
+      <section id="managerTabClients" style="display: none;">
+        <div class="card" style="margin-bottom: 18px;">
+          <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px;">
+            <div>
+              <div class="card-title">👥 Cartera Nacional de Clientes Yogulé</div>
+              <p class="card-subtitle" style="margin-bottom: 0;">
+                Aquí ves <strong>qué necesita cada cliente habitualmente</strong> (unido por Foreign Key a sus pedidos) y su <strong>Usuario y Contraseña</strong> para que entren a pedir directo sin RLS.
+              </p>
+            </div>
+            <button class="btn btn-primary" onclick="toggleNewClientForm()">
+              ➕ Nuevo Cliente con Usuario y Clave
+            </button>
+          </div>
+
+          <!-- Formulario Desplegable para Crear Nuevo Cliente con su Usuario y Contraseña -->
+          <form id="newClientForm" onsubmit="handleCreateClient(event)" style="display: none; margin-top: 18px; padding-top: 18px; border-top: 2px dashed #cbd5e1;">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px;">
+              <div class="form-group">
+                <label class="form-label">Nombre del Cliente *</label>
+                <input type="text" id="ncName" class="form-input" placeholder="Ej. Pedro Mamani" required />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Nombre de Tienda / Distribuidora *</label>
+                <input type="text" id="ncBusiness" class="form-input" placeholder="Ej. Comercial Lácteos Sur" required />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Ciudad / Destino *</label>
+                <input type="text" id="ncCity" class="form-input" placeholder="Ej. Tacna, Puno, Moquegua..." required />
+              </div>
+              <div class="form-group">
+                <label class="form-label">WhatsApp / Celular *</label>
+                <input type="text" id="ncPhone" class="form-input" placeholder="Ej. 952112233" required />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Agencia de Envío Preferida</label>
+                <input type="text" id="ncAgency" class="form-input" placeholder="Ej. Marvisur / Shalom" value="Shalom" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">¿Qué suele necesitar este cliente?</label>
+                <input type="text" id="ncNotes" class="form-input" placeholder="Ej. Pide 20 Fresa, 15 Durazno y 5 Queso Paria cada lunes" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">👤 Usuario para la App *</label>
+                <input type="text" id="ncUser" class="form-input" placeholder="Ej. pedro_tacna" required />
+              </div>
+              <div class="form-group">
+                <label class="form-label">🔑 Contraseña para la App *</label>
+                <input type="text" id="ncPass" class="form-input" value="123456" required />
+              </div>
+            </div>
+            <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 8px;">
+              <button type="button" class="btn btn-outline" onclick="toggleNewClientForm()">Cancelar</button>
+              <button type="submit" class="btn btn-green">💾 Guardar Cliente en Supabase</button>
+            </div>
+          </form>
+        </div>
+
+        <div id="clientsPortfolioGrid" class="clients-grid"></div>
+      </section>
+
+      <!-- SUB-VISTA D: CATÁLOGO DE LOS 10 SABORES SALUDABLES Y PRODUCTOS YOGULÉ -->
+      <section id="managerTabProducts" style="display: none;">
+        <div class="promo-10-banner">
+          <div style="flex: 1;">
+            <h2 style="font-size: 1.35rem; font-weight: 900;">🥛 Catálogo Oficial: Único con 10 Sabores Saludables + Derivados de Altura</h2>
+            <p style="font-size: 0.95rem; margin-top: 4px;">
+              Tabla <code>productos</code> en Supabase • Yogurt Probio Yogulé 1000 cc (Fresa, Durazno, Lúcuma, Sauco, Guanábana, Maracuyá, Mora, Piña, Vainilla, Natural) y Queso Paria de Cabana.
+            </p>
+          </div>
+          <img src="assets/yogurt-probio-fresa.jpg" alt="Yogurt Probio Yogulé" class="promo-10-img" />
+        </div>
+
+        <div id="managerProductsGrid" class="products-grid"></div>
+      </section>
+    </main>
+
+    <!-- ======================================================================
+         PANTALLA 3: PORTAL DEL CLIENTE (CUANDO INGRESA CON SU USUARIO Y CLAVE)
+         ====================================================================== -->
+    <main id="clientView" style="display: none;">
+
+      <!-- Pestañas Súper Simples para el Cliente (Solo 2 botones grandes) -->
+      <nav class="main-nav" style="grid-template-columns: repeat(2, 1fr);">
+        <button class="nav-tab active" id="clientTabBtnOrder" onclick="switchClientTab('newOrder')">
+          🛒 1. Hacer mi Pedido Yogulé
+        </button>
+        <button class="nav-tab" id="clientTabBtnHistory" onclick="switchClientTab('myOrders')">
+          🚚 2. Mis Pedidos y Seguimiento
+          <span id="clientOrdersCountBadge" class="nav-badge">0</span>
+        </button>
+      </nav>
+
+      <!-- CLIENTE SUB-VISTA 1: HACER PEDIDO EN SEGUNDOS -->
+      <section id="clientSectionNewOrder">
+        <!-- Caja de "Lo que tú siempre pides" (1 clic) -->
+        <div class="card" style="margin-bottom: 18px; background: linear-gradient(135deg, #fffdf5 0%, #fef9e7 100%); border: 2px solid var(--yogule-gold);">
+          <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px;">
+            <div>
+              <div class="card-title" style="color: #92400e;">⭐ Tu Pedido Habitual en Yogulé</div>
+              <p id="clientFrequentSummary" style="font-size: 0.95rem; color: #78350f; margin-top: 4px;"></p>
+            </div>
+            <button class="btn btn-primary" onclick="loadClientFrequentItemsToCart()">
+              ⚡ Cargar lo que siempre pido en 1 Clic
+            </button>
+          </div>
+        </div>
+
+        <!-- Resumen Flotante del Carrito Arriba para que el Cliente siempre vea qué está pidiendo -->
+        <div id="clientCartBox" class="card" style="margin-bottom: 18px; border: 3px solid var(--yogule-pink);">
+          <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px;">
+            <div>
+              <div class="card-title">🧺 Resumen de tu Pedido Actual</div>
+              <p id="clientCartText" style="color: #475569; font-weight: 600;">Aún no has elegido botellas. Usa los botones [+] abajo o carga tu pedido habitual.</p>
+            </div>
+            <div style="text-align: right;">
+              <div style="font-size: 0.85rem; color: #64748b; font-weight: 700;">TOTAL ESTIMADO</div>
+              <div id="clientCartTotal" style="font-size: 1.85rem; font-weight: 900; color: var(--yogule-pink);">S/ 0.00</div>
+            </div>
+          </div>
+
+          <div id="clientCartItemsDetail" style="margin-top: 12px;"></div>
+
+          <div id="clientCartSubmitArea" style="display: none; margin-top: 14px; padding-top: 14px; border-top: 1px solid #e2e8f0;">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 12px;">
+              <div>
+                <label class="form-label">🚚 Agencia de Envío / Entrega</label>
+                <input type="text" id="clientOrderAgency" class="form-input" placeholder="Ej. Marvisur, Shalom..." />
+              </div>
+              <div>
+                <label class="form-label">📝 Indicación adicional (opcional)</label>
+                <input type="text" id="clientOrderNotes" class="form-input" placeholder="Ej. Enviar en el turno de la tarde..." />
+              </div>
+            </div>
+            <button class="btn btn-green btn-block" style="font-size: 1.12rem; padding: 16px;" onclick="submitClientOrder()">
+              ✅ ENVIAR MI PEDIDO A YOGULÉ (Se registrará como PENDIENTE)
+            </button>
+          </div>
+        </div>
+
+        <!-- Grilla de los 10 Sabores Saludables + Queso Paria con botones grandes [-] y [+] -->
+        <h3 style="margin-bottom: 12px; font-size: 1.18rem;">🥛 Elige las cantidades de cada sabor Yogulé:</h3>
+        <div id="clientProductsCatalog" class="products-grid"></div>
+      </section>
+
+      <!-- CLIENTE SUB-VISTA 2: MIS PEDIDOS Y TRAZABILIDAD EN 3 ESTADOS -->
+      <section id="clientSectionMyOrders" style="display: none;">
+        <div class="card" style="margin-bottom: 16px;">
+          <div class="card-title">🚚 Seguimiento en Vivo de tus Pedidos Yogulé</div>
+          <p class="card-subtitle" style="margin-bottom: 0;">
+            Cada pedido tiene un código único de Supabase (<code>YOG-000XX</code>) y muestra en qué etapa exacta se encuentra:
+            <strong>1. PENDIENTE</strong> ➔ <strong>2. RECIBIDO</strong> ➔ <strong>3. ENTREGADO</strong>.
+          </p>
+        </div>
+        <div id="clientMyOrdersList" class="orders-list"></div>
+      </section>
+
+    </main>
+
+  </div>
+
+  <!-- Contenedor de Notificaciones Claritas -->
+  <div id="toastContainer" class="toast-container"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
