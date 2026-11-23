@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>YOGULÉ • Control de Pedidos y Trazabilidad</title>
+  <title>YOGULÉ • Pedidos</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -13,59 +13,53 @@
     <div class="proto-topbar-left">
       <span id="syncStatusPill" class="sync-pill online">
         <span class="sync-dot"></span>
-        <span id="syncStatusText">Supabase En Línea</span>
+        <span id="syncStatusText">En Línea</span>
       </span>
       <button class="proto-btn" onclick="toggleOfflineMode()" id="btnOfflineToggle">
-        Simular Sin Internet
+        Modo Sin Internet
       </button>
       <button class="proto-btn" onclick="reloadFromSupabase()">
-        Sincronizar
+        Actualizar
       </button>
     </div>
     <div class="proto-topbar-right">
       <button class="proto-btn active" id="btnViewDesktop" onclick="setViewportMode('desktop')">
-        Vista PC
+        PC
       </button>
       <button class="proto-btn" id="btnViewMobile" onclick="setViewportMode('mobile')">
-        Vista Celular
+        Celular
       </button>
     </div>
   </div>
 
   <div id="viewportWrapper" class="viewport-wrapper">
 
-    <!-- CABECERA COMPACTA -->
+    <!-- CABECERA MINIMALISTA -->
     <header class="brand-header">
       <div class="brand-identity">
         <img src="assets/logo-yogule.jpg" alt="Yogulé" class="brand-logo" />
-        <div class="brand-titles">
-          <h1>YOGULÉ</h1>
-          <p>Control de Pedidos y Trazabilidad (1. Pendiente ➔ 2. Recibido ➔ 3. Entregado)</p>
-        </div>
+        <h1>YOGULÉ</h1>
       </div>
 
       <div id="userSessionBox" class="user-session-box" style="display: none;">
         <span id="sessionUserName" class="user-session-name">Encargada</span>
-        <span id="sessionUserRole" class="user-session-role">ENCARGADO</span>
-        <button class="btn btn-outline" style="padding: 3px 8px; font-size: 11px;" onclick="logout()">
-          Cambiar Usuario
+        <button class="btn btn-outline" style="padding: 2px 8px; font-size: 11px;" onclick="logout()">
+          Salir
         </button>
       </div>
     </header>
 
     <!-- ======================================================================
-         PANTALLA 1: INICIO DE SESIÓN COMPACTO
+         PANTALLA 1: INICIO DE SESIÓN
          ====================================================================== -->
     <main id="loginView">
       <div class="login-container">
         <div class="card">
           <div class="card-title">Iniciar Sesión</div>
-          <p class="card-subtitle">Ingresa con tu usuario y contraseña.</p>
-
-          <form onsubmit="handleManualLogin(event)">
+          <form onsubmit="handleManualLogin(event)" style="margin-top: 8px;">
             <div class="form-group">
               <label class="form-label" for="loginUsername">Usuario</label>
-              <input type="text" id="loginUsername" class="form-input" placeholder="Ej. encargada o maria_arequipa" required />
+              <input type="text" id="loginUsername" class="form-input" placeholder="Usuario" required />
             </div>
             <div class="form-group">
               <label class="form-label" for="loginPassword">Contraseña</label>
@@ -78,71 +72,66 @@
         </div>
 
         <div class="card">
-          <div class="card-title">Cuentas de Prueba (1 Clic)</div>
-          <p class="card-subtitle">Toca un usuario para entrar como Encargada o como Cliente:</p>
+          <div class="card-title" style="margin-bottom: 8px;">Acceso Rápido (Pruebas)</div>
           <div id="quickLoginList" class="quick-login-list"></div>
         </div>
       </div>
     </main>
 
     <!-- ======================================================================
-         PANTALLA 2: PANEL DE LA ENCARGADA (COMPACTO EN 1 PANTALLA)
+         PANTALLA 2: PANEL DE LA ENCARGADA
          ====================================================================== -->
     <main id="managerView" style="display: none;">
 
       <nav class="main-nav">
         <button class="nav-tab active" id="tabBtnOrders" onclick="switchManagerTab('orders')">
-          1. Pedidos <span id="badgePendingCount" class="nav-badge">0</span>
+          Pedidos <span id="badgePendingCount" class="nav-badge">0</span>
         </button>
         <button class="nav-tab" id="tabBtnWhatsapp" onclick="switchManagerTab('whatsapp')">
-          2. Pegar de WhatsApp
+          Pegar WhatsApp
         </button>
         <button class="nav-tab" id="tabBtnClients" onclick="switchManagerTab('clients')">
-          3. Cartera de Clientes
+          Clientes
         </button>
         <button class="nav-tab" id="tabBtnProducts" onclick="switchManagerTab('products')">
-          4. Productos
+          Productos
         </button>
       </nav>
 
-      <!-- SUB-VISTA A: TABLERO DE PEDIDOS -->
+      <!-- SUB-VISTA A: PEDIDOS -->
       <section id="managerTabOrders">
-        <!-- Semáforo + Filtros en 1 sola barra -->
         <div class="toolbar-row">
           <div class="status-semaphore-grid">
             <div class="semaphore-card pendiente selected" id="filterCardPENDIENTE" onclick="setOrderFilter('PENDIENTE')">
-              <span>1. PENDIENTE</span>
+              <span>Pendientes</span>
               <span class="semaphore-count" id="countPendiente">0</span>
             </div>
             <div class="semaphore-card recibido" id="filterCardRECIBIDO" onclick="setOrderFilter('RECIBIDO')">
-              <span>2. RECIBIDO</span>
+              <span>Recibidos</span>
               <span class="semaphore-count" id="countRecibido">0</span>
             </div>
             <div class="semaphore-card entregado" id="filterCardENTREGADO" onclick="setOrderFilter('ENTREGADO')">
-              <span>3. ENTREGADO</span>
+              <span>Entregados</span>
               <span class="semaphore-count" id="countEntregado">0</span>
             </div>
             <div class="semaphore-card todos" id="filterCardTODOS" onclick="setOrderFilter('TODOS')">
-              <span>TODOS</span>
+              <span>Todos</span>
               <span class="semaphore-count" id="countTodos">0</span>
             </div>
           </div>
 
-          <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
+          <div style="display: flex; gap: 6px; align-items: center;">
             <input
               type="text"
               id="searchOrdersInput"
               class="form-input"
-              style="width: 190px; padding: 4px 8px;"
-              placeholder="Buscar código o cliente..."
+              style="width: 170px; padding: 4px 8px;"
+              placeholder="Buscar cliente o código..."
               oninput="renderManagerOrders()"
             />
-            <select id="cityFilterSelect" class="form-select" style="width: 150px; padding: 4px 8px;" onchange="renderManagerOrders()">
-              <option value="TODAS">Todas las ciudades</option>
+            <select id="cityFilterSelect" class="form-select" style="width: 135px; padding: 4px 8px;" onchange="renderManagerOrders()">
+              <option value="TODAS">Todas</option>
             </select>
-            <button class="btn btn-teal" onclick="switchManagerTab('whatsapp')">
-              + Pegar WhatsApp
-            </button>
           </div>
         </div>
 
@@ -154,61 +143,56 @@
         <div class="login-container" style="grid-template-columns: 1fr 1fr;">
           <div class="card">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-              <div class="card-title">Pegar Mensaje de WhatsApp</div>
+              <div class="card-title">Mensaje de WhatsApp</div>
               <div style="display: flex; gap: 4px;">
-                <button type="button" class="btn btn-outline" style="padding: 2px 6px; font-size: 11px;" onclick="loadSampleWhatsApp(1)">Ej. María</button>
-                <button type="button" class="btn btn-outline" style="padding: 2px 6px; font-size: 11px;" onclick="loadSampleWhatsApp(2)">Ej. Carlos</button>
-                <button type="button" class="btn btn-outline" style="padding: 2px 6px; font-size: 11px;" onclick="loadSampleWhatsApp(3)">Ej. Elena</button>
+                <button type="button" class="btn btn-outline" style="padding: 2px 6px; font-size: 11px;" onclick="loadSampleWhatsApp(1)">Ej. 1</button>
+                <button type="button" class="btn btn-outline" style="padding: 2px 6px; font-size: 11px;" onclick="loadSampleWhatsApp(2)">Ej. 2</button>
+                <button type="button" class="btn btn-outline" style="padding: 2px 6px; font-size: 11px;" onclick="loadSampleWhatsApp(3)">Ej. 3</button>
               </div>
             </div>
 
             <div class="form-group">
-              <label class="form-label">1. Cliente:</label>
-              <select id="waClientSelect" class="form-select" onchange="updateWaClientNeedsHint()"></select>
-              <div id="waClientNeedsHint" class="client-needs-box"></div>
+              <label class="form-label">Cliente:</label>
+              <select id="waClientSelect" class="form-select"></select>
             </div>
 
             <div class="form-group" style="margin-bottom: 0;">
-              <label class="form-label">2. Texto del WhatsApp:</label>
+              <label class="form-label">Texto:</label>
               <textarea
                 id="waRawText"
                 class="form-textarea"
                 rows="4"
-                placeholder="Pega aquí el texto del pedido..."
+                placeholder="Pega aquí el pedido de WhatsApp..."
                 oninput="parseWhatsAppTextLive()"
               ></textarea>
             </div>
           </div>
 
           <div class="card">
-            <div class="card-title">Productos y Cantidades Detectadas</div>
-            <p class="card-subtitle">Ajusta las cantidades si es necesario y guarda el pedido:</p>
+            <div class="card-title" style="margin-bottom: 6px;">Productos Detectados</div>
             <div id="waParsedPreview"></div>
           </div>
         </div>
       </section>
 
-      <!-- SUB-VISTA C: CARTERA DE CLIENTES -->
+      <!-- SUB-VISTA C: CARTERA DE CLIENTES (LIMPIA, SOLO BOTÓN DE PEDIDO HABITUAL) -->
       <section id="managerTabClients" style="display: none;">
         <div class="toolbar-row">
-          <div>
-            <strong>Cartera de Clientes</strong>
-            <span style="color: #64748b; margin-left: 6px;">Configura el Pedido Habitual y las credenciales (Usuario/Clave) de cada cliente.</span>
-          </div>
+          <strong>Cartera de Clientes</strong>
           <button class="btn btn-primary" onclick="toggleNewClientForm()">
             + Nuevo Cliente
           </button>
         </div>
 
-        <!-- Formulario Nuevo Cliente Compacto -->
+        <!-- Formulario Nuevo Cliente -->
         <form id="newClientForm" class="card" onsubmit="handleCreateClient(event)" style="display: none; margin-bottom: 8px;">
-          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px;">
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 6px; align-items: end;">
             <div>
-              <label class="form-label">Nombre Contacto *</label>
+              <label class="form-label">Nombre *</label>
               <input type="text" id="ncName" class="form-input" required />
             </div>
             <div>
-              <label class="form-label">Negocio / Tienda *</label>
+              <label class="form-label">Tienda / Negocio *</label>
               <input type="text" id="ncBusiness" class="form-input" required />
             </div>
             <div>
@@ -216,35 +200,32 @@
               <input type="text" id="ncCity" class="form-input" required />
             </div>
             <div>
-              <label class="form-label">WhatsApp *</label>
-              <input type="text" id="ncPhone" class="form-input" required />
-            </div>
-            <div>
-              <label class="form-label">Dirección Reparto</label>
-              <input type="text" id="ncAddress" class="form-input" />
+              <label class="form-label">Teléfono</label>
+              <input type="text" id="ncPhone" class="form-input" />
             </div>
             <div>
               <label class="form-label">Usuario *</label>
               <input type="text" id="ncUser" class="form-input" required />
             </div>
             <div>
-              <label class="form-label">Contraseña *</label>
+              <label class="form-label">Clave *</label>
               <input type="text" id="ncPass" class="form-input" value="123456" required />
             </div>
-            <div style="display: flex; align-items: flex-end; gap: 4px;">
+            <div style="display: flex; gap: 4px;">
               <button type="submit" class="btn btn-green" style="flex:1;">Guardar</button>
               <button type="button" class="btn btn-outline" onclick="toggleNewClientForm()">✕</button>
             </div>
           </div>
         </form>
 
-        <!-- Editor compacto del Pedido Habitual de un Cliente -->
-        <div id="managerHabitualEditorCard" class="card" style="display: none; margin-bottom: 8px; border: 2px solid var(--yogule-gold); background: #fffdf5;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-            <strong id="managerHabitualEditorTitle">Configurar Pedido Habitual del Cliente</strong>
+        <!-- Panel emergente cuando se toca el botón "Pedido Habitual" de un cliente -->
+        <div id="managerHabitualEditorCard" class="card" style="display: none; margin-bottom: 8px; border: 2px solid var(--yogule-pink);">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; flex-wrap: wrap; gap: 6px;">
+            <strong id="managerHabitualEditorTitle">Pedido Habitual</strong>
             <div style="display: flex; gap: 6px;">
-              <button class="btn btn-green" onclick="saveManagerHabitualConfig()">Guardar Pedido Habitual</button>
-              <button class="btn btn-outline" onclick="closeManagerHabitualEditor()">Cerrar ✕</button>
+              <button class="btn btn-primary" onclick="createOrderFromManagerHabitualModal()">Crear Pedido Ahora</button>
+              <button class="btn btn-green" onclick="saveManagerHabitualConfig()">Guardar Cambios</button>
+              <button class="btn btn-outline" onclick="closeManagerHabitualEditor()">✕</button>
             </div>
           </div>
           <div id="managerHabitualProductsGrid" class="products-grid"></div>
@@ -253,43 +234,32 @@
         <div id="clientsPortfolioGrid" class="clients-grid"></div>
       </section>
 
-      <!-- SUB-VISTA D: GESTIÓN DE PRODUCTOS (SIN PRECIOS NI STOCK) -->
+      <!-- SUB-VISTA D: PRODUCTOS (SIN CATEGORÍA, PRECIOS NI STOCK) -->
       <section id="managerTabProducts" style="display: none;">
         <div class="toolbar-row">
-          <div>
-            <strong>Catálogo de Productos Yogulé</strong>
-            <span style="color: #64748b; margin-left: 6px;">Agrega o activa los productos que verán los clientes al hacer sus pedidos.</span>
-          </div>
+          <strong>Productos Yogulé</strong>
           <button class="btn btn-primary" onclick="toggleNewProductForm()">
             + Agregar Producto
           </button>
         </div>
 
-        <!-- Formulario Compacto para Agregar Producto (Sin precios ni stock) -->
+        <!-- Formulario Agregar Producto (Solo Nombre, Sabor y Presentación) -->
         <form id="newProductForm" class="card" onsubmit="handleCreateProduct(event)" style="display: none; margin-bottom: 8px;">
           <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px; align-items: end;">
             <div>
               <label class="form-label">Nombre del Producto *</label>
-              <input type="text" id="npName" class="form-input" placeholder="Ej. Yogurt Probio Chirimoya" required />
+              <input type="text" id="npName" class="form-input" placeholder="Ej. Yogurt Fresa" required />
             </div>
             <div>
-              <label class="form-label">Sabor / Variante *</label>
-              <input type="text" id="npFlavor" class="form-input" placeholder="Ej. Chirimoya" required />
+              <label class="form-label">Sabor *</label>
+              <input type="text" id="npFlavor" class="form-input" placeholder="Ej. Fresa" required />
             </div>
             <div>
               <label class="form-label">Presentación *</label>
-              <input type="text" id="npPresentation" class="form-input" value="Botella 1000 cc (1L)" required />
-            </div>
-            <div>
-              <label class="form-label">Línea</label>
-              <select id="npLine" class="form-select">
-                <option value="Yogurt Probio">Yogurt Probio</option>
-                <option value="Derivados Lácteos">Derivados Lácteos</option>
-                <option value="Packs">Packs</option>
-              </select>
+              <input type="text" id="npPresentation" class="form-input" value="1L" required />
             </div>
             <div style="display: flex; gap: 6px;">
-              <button type="submit" class="btn btn-green" style="flex: 1;">Guardar Producto</button>
+              <button type="submit" class="btn btn-green" style="flex: 1;">Guardar</button>
               <button type="button" class="btn btn-outline" onclick="toggleNewProductForm()">✕</button>
             </div>
           </div>
@@ -300,59 +270,38 @@
     </main>
 
     <!-- ======================================================================
-         PANTALLA 3: PORTAL DEL CLIENTE (TODO CABE EN 1 PANTALLA, SOLO CANTIDADES)
+         PANTALLA 3: PORTAL DEL CLIENTE (MÍNIMO RUIDO VISUAL)
          ====================================================================== -->
     <main id="clientView" style="display: none;">
 
       <nav class="main-nav">
         <button class="nav-tab active" id="clientTabBtnOrder" onclick="switchClientTab('newOrder')">
-          1. Hacer Pedido
+          Hacer Pedido
         </button>
         <button class="nav-tab" id="clientTabBtnHabitual" onclick="switchClientTab('habitualConfig')">
-          2. Configurar Mi Pedido Habitual
+          Pedido Habitual
         </button>
         <button class="nav-tab" id="clientTabBtnHistory" onclick="switchClientTab('myOrders')">
-          3. Mis Pedidos <span id="clientOrdersCountBadge" class="nav-badge">0</span>
+          Mis Pedidos <span id="clientOrdersCountBadge" class="nav-badge">0</span>
         </button>
       </nav>
 
-      <!-- CLIENTE SUB-VISTA 1: HACER PEDIDO EN 1 SOLA PANTALLA -->
+      <!-- CLIENTE SUB-VISTA 1: HACER PEDIDO -->
       <section id="clientSectionNewOrder">
-        <!-- Barra superior con Pedido Habitual + Resumen Carrito en 1 sola fila compacta -->
-        <div class="toolbar-row" style="background: #fffdf5; border-color: var(--yogule-gold);">
-          <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
-            <strong style="color: #92400e;">Pedido Habitual:</strong>
-            <span id="clientFrequentSummary" style="color: #78350f;"></span>
-          </div>
-          <div style="display: flex; gap: 6px;">
-            <button class="btn btn-outline" onclick="switchClientTab('habitualConfig')">
-              Configurar Habitual
-            </button>
-            <button class="btn btn-primary" onclick="loadClientFrequentItemsToCart()">
-              Cargar Pedido Habitual (1 Clic)
-            </button>
-          </div>
+        <div class="toolbar-row">
+          <strong>Selecciona las cantidades de tu pedido:</strong>
+          <button class="btn btn-primary" onclick="loadClientFrequentItemsToCart()">
+            Cargar Mi Pedido Habitual
+          </button>
         </div>
 
-        <!-- Grilla compacta de todos los productos (caben todos sin hacer scroll) -->
         <div id="clientProductsCatalog" class="products-grid" style="margin-bottom: 8px;"></div>
 
-        <!-- Barra inferior fija de confirmación del pedido (solo cantidades) -->
-        <div id="clientCartBox" class="card" style="border: 2px solid var(--yogule-pink);">
+        <div id="clientCartBox" class="card" style="border: 1.5px solid var(--yogule-pink);">
           <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px;">
-            <div style="flex: 1; min-width: 220px;">
-              <strong id="clientCartText">Selecciona las cantidades arriba o carga tu pedido habitual.</strong>
-              <div id="clientCartItemsDetail" style="margin-top: 4px;"></div>
-            </div>
+            <strong id="clientCartText">0 unidades seleccionadas</strong>
 
-            <div id="clientCartSubmitArea" style="display: none; align-items: center; gap: 6px; flex-wrap: wrap;">
-              <input
-                type="text"
-                id="clientOrderNotes"
-                class="form-input"
-                style="width: 210px;"
-                placeholder="Nota para el reparto (opcional)..."
-              />
+            <div id="clientCartSubmitArea" style="display: none; align-items: center; gap: 6px;">
               <button type="button" class="btn btn-outline" onclick="saveCurrentCartAsHabitual()">
                 Guardar como Habitual
               </button>
@@ -364,22 +313,18 @@
         </div>
       </section>
 
-      <!-- CLIENTE SUB-VISTA 2: CONFIGURAR MI PEDIDO HABITUAL -->
+      <!-- CLIENTE SUB-VISTA 2: CONFIGURAR PEDIDO HABITUAL -->
       <section id="clientSectionHabitualConfig" style="display: none;">
-        <div class="toolbar-row" style="border-color: var(--yogule-gold); background: #fffdf5;">
-          <div>
-            <strong>Configurar Mi Pedido Habitual</strong>
-            <span style="color: #78350f; margin-left: 6px;">Define las cantidades que pides siempre para cargarlas con 1 clic:</span>
-          </div>
+        <div class="toolbar-row">
+          <strong>Define las cantidades de tu Pedido Habitual:</strong>
           <button class="btn btn-green" onclick="saveClientHabitualConfig()">
-            Guardar Mi Pedido Habitual
+            Guardar Pedido Habitual
           </button>
         </div>
-
         <div id="clientHabitualProductsGrid" class="products-grid"></div>
       </section>
 
-      <!-- CLIENTE SUB-VISTA 3: MIS PEDIDOS Y TRAZABILIDAD -->
+      <!-- CLIENTE SUB-VISTA 3: MIS PEDIDOS -->
       <section id="clientSectionMyOrders" style="display: none;">
         <div id="clientMyOrdersList" class="orders-list"></div>
       </section>

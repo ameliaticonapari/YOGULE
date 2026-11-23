@@ -1,5 +1,5 @@
 /* ============================================================================
-   LÓGICA OPERATIVA COMPACTA • SOLO CANTIDADES (SIN PRECIOS, STOCK NI AGENCIA)
+   LÓGICA OPERATIVA MINIMALISTA • CERO RUIDO VISUAL • SOLO CANTIDADES
    Conectado en vivo a Supabase (Sin RLS) + Modo Offline
    Proyecto Supabase: https://bpaxkwzbknmntqdsdzwu.supabase.co
    ============================================================================ */
@@ -22,8 +22,7 @@ const state = {
   clientHabitualDraft: {},
   managerEditingClientId: null,
   managerHabitualDraft: {},
-  waDraftItems: {},
-  waUnmatchedLines: []
+  waDraftItems: {}
 };
 
 function supaHeaders(extra = {}) {
@@ -77,7 +76,6 @@ function loadLocalCache() {
 async function reloadFromSupabase(silent = false) {
   if (state.isOfflineSimulated) {
     updateSyncStatusUI();
-    if (!silent) showToast('Modo Sin Internet activo. Usando datos locales.');
     return;
   }
 
@@ -108,11 +106,9 @@ async function reloadFromSupabase(silent = false) {
     updateSyncStatusUI();
     renderAll();
 
-    if (!silent) {
-      showToast('Datos sincronizados con Supabase');
-    }
+    if (!silent) showToast('Actualizado');
   } catch (err) {
-    console.error('Error conectando a Supabase:', err);
+    console.error(err);
     updateSyncStatusUI(true);
   }
 }
@@ -142,18 +138,15 @@ async function flushOfflineQueue() {
         await persistClientHabitualInSupabase(op.cliente_id, op.draftMap);
       }
     } catch (e) {
-      console.error('Error sincronizando cola:', e);
+      console.error(e);
     }
   }
-  showToast(`Sincronizados ${queueCopy.length} cambio(s) pendientes.`);
 }
 
 function toggleOfflineMode() {
   state.isOfflineSimulated = !state.isOfflineSimulated;
   updateSyncStatusUI();
-  if (state.isOfflineSimulated) {
-    showToast('Modo Sin Internet activado. Guardando localmente.');
-  } else {
+  if (!state.isOfflineSimulated) {
     reloadFromSupabase(true);
   }
 }
@@ -166,19 +159,19 @@ function updateSyncStatusUI(hasError = false) {
 
   if (state.isOfflineSimulated || hasError) {
     pill.className = 'sync-pill offline';
-    text.textContent = `Sin Internet (${qCount} en cola)`;
-    btn.textContent = 'Reconectar';
+    text.textContent = `Sin Internet (${qCount})`;
+    btn.textContent = 'Conectar';
     btn.classList.add('active');
   } else {
     pill.className = 'sync-pill online';
-    text.textContent = `Supabase En Línea (${state.pedidos.length} pedidos)`;
-    btn.textContent = 'Simular Sin Internet';
+    text.textContent = 'En Línea';
+    btn.textContent = 'Modo Sin Internet';
     btn.classList.remove('active');
   }
 }
 
 // ============================================================================
-// 2. INICIO DE SESIÓN (TABLA CLIENTES SIN RLS)
+// 2. INICIO DE SESIÓN
 // ============================================================================
 
 async function handleManualLogin(e) {
@@ -203,12 +196,12 @@ async function loginWithCredentials(username, password) {
           setActiveUser(fullClient);
           return;
         } else {
-          showToast('Usuario o contraseña incorrectos.');
+          showToast('Usuario o clave incorrectos');
           return;
         }
       }
     } catch (err) {
-      console.warn('Usando login local:', err);
+      console.warn(err);
     }
   }
 
@@ -217,7 +210,7 @@ async function loginWithCredentials(username, password) {
          (c.password_visible === password || password === '123456' || password === 'yogule123')
   );
   if (!found) {
-    showToast('Usuario o contraseña incorrectos.');
+    showToast('Usuario o clave incorrectos');
     return;
   }
   setActiveUser(found);
@@ -231,8 +224,6 @@ function setActiveUser(userObj) {
   document.getElementById('loginView').style.display = 'none';
   document.getElementById('userSessionBox').style.display = 'flex';
   document.getElementById('sessionUserName').textContent = `${userObj.nombre_contacto} (${userObj.ciudad})`;
-  document.getElementById('sessionUserRole').textContent =
-    userObj.rol === 'encargado' ? 'ENCARGADA' : userObj.nombre_negocio;
 
   if (userObj.rol === 'encargado') {
     document.getElementById('managerView').style.display = 'block';
@@ -260,7 +251,7 @@ function renderQuickLoginList() {
   if (!container) return;
 
   if (state.clientes.length === 0) {
-    container.innerHTML = `<div style="padding:8px; color:#64748b;">Cargando usuarios desde Supabase...</div>`;
+    container.innerHTML = `<div style="padding:6px; color:#64748b;">Cargando...</div>`;
     return;
   }
 
@@ -269,14 +260,14 @@ function renderQuickLoginList() {
     return `
       <button type="button" class="quick-login-item ${isManager ? 'manager' : ''}" onclick="loginWithCredentials('${c.usuario}', '${c.password_visible}')">
         <div>
-          <div style="font-weight: 800; color: #0f172a;">
+          <div style="font-weight: 700; color: #0f172a;">
             ${c.nombre_contacto} (${c.ciudad})
           </div>
-          <div style="font-size: 11px; color: #475569;">
-            ${c.nombre_negocio} • <code>${c.usuario}</code> / <code>${c.password_visible}</code>
+          <div style="font-size: 11px; color: #64748b;">
+            <code>${c.usuario}</code> / <code>${c.password_visible}</code>
           </div>
         </div>
-        <span class="btn ${isManager ? 'btn-primary' : 'btn-outline'}" style="padding: 3px 8px; font-size: 11px;">
+        <span class="btn ${isManager ? 'btn-primary' : 'btn-outline'}" style="padding: 2px 7px; font-size: 11px;">
           Entrar
         </span>
       </button>
@@ -285,7 +276,7 @@ function renderQuickLoginList() {
 }
 
 // ============================================================================
-// 3. PANEL ENCARGADA: TABLERO DE PEDIDOS Y TRAZABILIDAD (SOLO CANTIDADES)
+// 3. TARJETAS DE PEDIDOS SIN RUIDO VISUAL
 // ============================================================================
 
 function switchManagerTab(tabName) {
@@ -329,7 +320,7 @@ function renderManagerOrders() {
   const citySelect = document.getElementById('cityFilterSelect');
   const currentCity = citySelect.value || 'TODAS';
   const cities = Array.from(new Set(state.clientes.filter(c => c.rol === 'cliente').map(c => c.ciudad)));
-  citySelect.innerHTML = `<option value="TODAS">Todas las ciudades (${cities.length})</option>` +
+  citySelect.innerHTML = `<option value="TODAS">Todas (${cities.length})</option>` +
     cities.map(city => `<option value="${city}" ${city === currentCity ? 'selected' : ''}>${city}</option>`).join('');
 
   const query = (document.getElementById('searchOrdersInput')?.value || '').toLowerCase().trim();
@@ -339,7 +330,7 @@ function renderManagerOrders() {
     if (state.orderFilter !== 'TODOS' && p.estado !== state.orderFilter) return false;
     if (currentCity !== 'TODAS' && client?.ciudad !== currentCity) return false;
     if (query) {
-      const haystack = `${p.codigo_pedido} ${client?.nombre_contacto || ''} ${client?.nombre_negocio || ''} ${client?.ciudad || ''} ${client?.direccion_entrega || ''}`.toLowerCase();
+      const haystack = `${p.codigo_pedido} ${client?.nombre_contacto || ''} ${client?.nombre_negocio || ''} ${client?.ciudad || ''}`.toLowerCase();
       if (!haystack.includes(query)) return false;
     }
     return true;
@@ -347,11 +338,7 @@ function renderManagerOrders() {
 
   const listEl = document.getElementById('managerOrdersList');
   if (filtered.length === 0) {
-    listEl.innerHTML = `
-      <div class="card" style="text-align: center; padding: 16px;">
-        No hay pedidos en estado ${state.orderFilter}
-      </div>
-    `;
+    listEl.innerHTML = `<div class="card" style="text-align: center; padding: 14px; color:#64748b;">Sin pedidos en ${state.orderFilter}</div>`;
     return;
   }
 
@@ -362,113 +349,59 @@ function renderOrderCardHTML(pedido, isManagerView) {
   const cliente = state.clientes.find(c => c.id === pedido.cliente_id) || {
     nombre_contacto: 'Cliente',
     nombre_negocio: '',
-    ciudad: '',
-    telefono_whatsapp: ''
+    ciudad: ''
   };
-  const registrador = state.clientes.find(c => c.id === pedido.registrado_por_id);
   const items = state.detalles.filter(d => d.pedido_id === pedido.id);
-  const trazas = state.trazabilidad.filter(t => t.pedido_id === pedido.id);
-
-  const totalItemsChecked = items.filter(i => i.alistado).length;
-  const allChecked = items.length > 0 && totalItemsChecked === items.length;
   const totalUnits = items.reduce((sum, it) => sum + Number(it.cantidad || 0), 0);
-
-  const step1Done = true;
-  const step2Done = pedido.estado === 'RECIBIDO' || pedido.estado === 'ENTREGADO';
-  const step3Done = pedido.estado === 'ENTREGADO';
 
   return `
     <article class="order-card estado-${pedido.estado}">
-      <div>
-        <div class="order-card-header">
-          <div>
-            <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
-              <span class="order-code-badge">${pedido.codigo_pedido}</span>
-              <span class="status-badge ${pedido.estado}">${pedido.estado}</span>
-              <span style="font-size: 11px; color: #475569; font-weight: 700;">
-                ${cliente.ciudad}${cliente.direccion_entrega ? ` • ${cliente.direccion_entrega}` : ''}
-              </span>
-            </div>
-            <div style="font-size: 13px; font-weight: 800; margin-top: 3px; color: #0f172a;">
-              ${cliente.nombre_negocio} — <span style="color: var(--yogule-pink);">${cliente.nombre_contacto}</span>
-            </div>
-            <div style="font-size: 11px; color: #64748b;">
-              Tel: ${cliente.telefono_whatsapp} • Reg: <code>${registrador ? registrador.usuario : cliente.usuario}</code>
-            </div>
-          </div>
-
-          <div style="text-align: right;">
-            <div style="font-size: 14px; font-weight: 900; color: var(--yogule-pink);">
-              ${totalUnits} und.
-            </div>
-            <div style="font-size: 11px; color: #64748b;">
-              ${formatDateTime(pedido.created_at)}
-            </div>
+      <!-- CABECERA EN 1 LÍNEA: Código + Cliente + Ciudad | Unidades + Fecha -->
+      <div class="order-card-header">
+        <div>
+          <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+            <span class="order-code-badge">${pedido.codigo_pedido}</span>
+            <strong style="font-size: 13px; color: #0f172a;">${cliente.nombre_negocio}</strong>
+            <span style="font-size: 12px; color: #64748b;">(${cliente.nombre_contacto} • ${cliente.ciudad})</span>
           </div>
         </div>
-
-        <!-- BARRA COMPACTA DE 3 ESTADOS -->
-        <div class="trace-stepper">
-          <div class="trace-step ${step1Done ? 'done' : ''}" style="${step1Done ? 'border: 1px solid var(--state-pendiente); color: #92400e; background:#fef3c7;' : ''}">
-            1. PENDIENTE
-          </div>
-          <div class="trace-step ${step2Done ? 'done' : ''}" style="${step2Done ? 'border: 1px solid var(--state-recibido); color: #075985; background:#e0f2fe;' : ''}">
-            2. RECIBIDO
-          </div>
-          <div class="trace-step ${step3Done ? 'done' : ''}" style="${step3Done ? 'border: 1px solid var(--state-entregado); color: #166534; background:#dcfce7;' : ''}">
-            3. ENTREGADO
-          </div>
+        <div style="text-align: right; white-space: nowrap;">
+          <strong style="font-size: 13px; color: var(--yogule-pink);">${totalUnits} und.</strong>
+          <span style="font-size: 11px; color: #64748b; margin-left: 4px;">${formatDateTime(pedido.created_at)}</span>
         </div>
-
-        <!-- CHECKLIST COMPACTO EN GRILLA -->
-        <div class="checklist-box">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; font-size: 11px;">
-            <strong>Productos (${items.length} sabores • ${totalUnits} und.):</strong>
-            <span style="font-weight: 800; color: ${allChecked ? '#166534' : '#b45309'};">
-              ${allChecked ? '✓ Alistado completo' : `Alistados: ${totalItemsChecked}/${items.length}`}
-            </span>
-          </div>
-
-          <div class="checklist-grid">
-            ${items.map(item => {
-              const prod = state.productos.find(pr => pr.id === item.producto_id) || {
-                nombre: 'Producto Yogulé',
-                presentacion: '1L'
-              };
-              return `
-                <div class="checklist-item ${item.alistado ? 'checked' : ''}" onclick="${isManagerView ? `toggleItemChecklist('${item.id}')` : ''}">
-                  <div class="check-box-ui">${item.alistado ? '✓' : ''}</div>
-                  <div style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                    <strong style="color: var(--yogule-pink);">${item.cantidad}</strong> × ${prod.nombre}
-                  </div>
-                </div>
-              `;
-            }).join('')}
-          </div>
-        </div>
-
-        ${pedido.observaciones ? `
-          <div style="font-size: 11px; color: #334155; margin-bottom: 5px; background: #fffbeb; padding: 4px 7px; border-radius: 4px;">
-            Nota: ${pedido.observaciones}
-          </div>
-        ` : ''}
       </div>
 
-      <div>
-        <div style="font-size: 10px; color: #64748b; margin-bottom: 6px; display: flex; flex-wrap: wrap; gap: 6px;">
-          ${trazas.map(t => `<span><b>${t.estado}:</b> ${formatDateTime(t.created_at)}</span>`).join(' • ')}
-        </div>
+      <!-- PRODUCTOS DIRECTOS (SIN CAJAS NI TEXTOS REPETIDOS) -->
+      <div class="checklist-grid" style="margin-bottom: 8px;">
+        ${items.map(item => {
+          const prod = state.productos.find(pr => pr.id === item.producto_id) || { nombre: 'Producto' };
+          return `
+            <div class="checklist-item ${item.alistado ? 'checked' : ''}" onclick="${isManagerView ? `toggleItemChecklist('${item.id}')` : ''}">
+              <div class="check-box-ui">${item.alistado ? '✓' : ''}</div>
+              <div style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                <strong style="color: var(--yogule-pink);">${item.cantidad}</strong> × ${prod.nombre}
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+
+      <!-- FILA INFERIOR ÚNICA: ESTADO ACTUAL + BOTÓN DE AVANCE -->
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-top: 6px; border-top: 1px solid #f1f5f9;">
+        <span class="status-badge ${pedido.estado}">
+          ${pedido.estado === 'PENDIENTE' ? '1. Pendiente' : pedido.estado === 'RECIBIDO' ? '2. Recibido' : '3. Entregado'}
+        </span>
 
         ${isManagerView ? `
-          <div style="display: flex; gap: 6px;">
+          <div>
             ${pedido.estado === 'PENDIENTE' ? `
-              <button class="btn btn-blue btn-block" onclick="advanceOrderStatus('${pedido.id}', 'RECIBIDO')">
-                Marcar RECIBIDO (Ya visto / Alistado)
+              <button class="btn btn-blue" style="padding: 4px 10px;" onclick="advanceOrderStatus('${pedido.id}', 'RECIBIDO')">
+                Pasar a Recibido ➔
               </button>
             ` : ''}
             ${pedido.estado === 'RECIBIDO' ? `
-              <button class="btn btn-green btn-block" onclick="advanceOrderStatus('${pedido.id}', 'ENTREGADO')">
-                Marcar ENTREGADO al Cliente
+              <button class="btn btn-green" style="padding: 4px 10px;" onclick="advanceOrderStatus('${pedido.id}', 'ENTREGADO')">
+                Pasar a Entregado ➔
               </button>
             ` : ''}
           </div>
@@ -524,15 +457,6 @@ async function advanceOrderStatus(pedidoId, nuevoEstado) {
   }
 
   pedido.estado = nuevoEstado;
-  const nowIso = new Date().toISOString();
-  state.trazabilidad.push({
-    id: 'local-' + Date.now(),
-    pedido_id: pedidoId,
-    estado: nuevoEstado,
-    responsable_nombre: state.currentUser?.nombre_contacto || 'Encargada',
-    created_at: nowIso
-  });
-
   saveLocalCache();
   renderAll();
 
@@ -545,7 +469,6 @@ async function advanceOrderStatus(pedidoId, nuevoEstado) {
     });
     saveLocalCache();
     updateSyncStatusUI();
-    showToast(`${pedido.codigo_pedido} marcado como ${nuevoEstado} localmente.`);
     return;
   }
 
@@ -559,7 +482,7 @@ async function advanceOrderStatus(pedidoId, nuevoEstado) {
       })
     });
     if (res.ok) {
-      showToast(`${pedido.codigo_pedido} pasó a ${nuevoEstado}`);
+      showToast(`${pedido.codigo_pedido}: ${nuevoEstado}`);
       await reloadFromSupabase(true);
     }
   } catch (e) {
@@ -568,7 +491,7 @@ async function advanceOrderStatus(pedidoId, nuevoEstado) {
 }
 
 // ============================================================================
-// 4. PARSER DE TEXTO DE WHATSAPP (COSTO $0 • SOLO CANTIDADES)
+// 4. PARSER DE TEXTO DE WHATSAPP
 // ============================================================================
 
 function populateWaClientsSelect() {
@@ -576,32 +499,15 @@ function populateWaClientsSelect() {
   if (!select) return;
   const onlyClients = state.clientes.filter(c => c.rol === 'cliente');
   select.innerHTML = onlyClients.map(c =>
-    `<option value="${c.id}">${c.nombre_contacto} — ${c.nombre_negocio} (${c.ciudad})</option>`
+    `<option value="${c.id}">${c.nombre_negocio} — ${c.nombre_contacto} (${c.ciudad})</option>`
   ).join('');
-  updateWaClientNeedsHint();
-}
-
-function updateWaClientNeedsHint() {
-  const select = document.getElementById('waClientSelect');
-  const hint = document.getElementById('waClientNeedsHint');
-  if (!select || !hint) return;
-  const client = state.clientes.find(c => c.id === select.value);
-  if (!client) return;
-
-  const clientFrec = state.frecuentes.filter(f => f.cliente_id === client.id);
-  const chips = clientFrec.map(f => {
-    const p = state.productos.find(pr => pr.id === f.producto_id);
-    return p ? `<span class="need-chip"><b>${f.cantidad_habitual}</b> × ${p.sabor}</span>` : '';
-  }).join('');
-
-  hint.innerHTML = `<b>Habitual:</b> ${chips || 'Sin configurar'}`;
 }
 
 function loadSampleWhatsApp(num) {
   const samples = {
-    1: 'Hola Yogulé soy María de Arequipa, envíame:\n20 yogurt fresa 1L\n15 durazno 1L\n12 sauco\n10 queso paria',
-    2: 'Buen día habla Carlos de Cusco, mándame:\n24 sauco\n18 lucuma\n15 natural\n3 cajas surtidas',
-    3: 'Hola soy Elena de Trujillo, apúntame:\n4 cajas surtidas\n25 fresa\n20 maracuya\n15 vainilla\n12 piña'
+    1: 'María de Arequipa:\n20 yogurt fresa\n15 durazno\n12 sauco\n10 queso paria',
+    2: 'Carlos de Cusco:\n24 sauco\n18 lucuma\n15 natural\n3 cajas surtidas',
+    3: 'Elena de Trujillo:\n4 cajas surtidas\n25 fresa\n20 maracuya\n15 vainilla'
   };
   document.getElementById('waRawText').value = samples[num] || samples[1];
   parseWhatsAppTextLive();
@@ -624,7 +530,6 @@ function parseWhatsAppTextLive() {
     const cityNorm = normalizeStr(c.ciudad);
     if ((firstName.length > 3 && normFull.includes(firstName)) || (cityNorm.length > 3 && normFull.includes(cityNorm))) {
       document.getElementById('waClientSelect').value = c.id;
-      updateWaClientNeedsHint();
       break;
     }
   }
@@ -635,18 +540,16 @@ function parseWhatsAppTextLive() {
     .filter(Boolean);
 
   const detected = {};
-  const unmatched = [];
   const activeProducts = state.productos.filter(p => p.activo !== false);
 
   for (const seg of segments) {
     const normSeg = normalizeStr(seg);
-    const qtyMatch = normSeg.match(/(\d+)\s*(?:und|unidades|botellas|cajas|moldes|litros)?/);
+    const qtyMatch = normSeg.match(/(\d+)/);
     if (!qtyMatch) continue;
 
     const qty = parseInt(qtyMatch[1], 10);
     if (!qty || qty <= 0) continue;
 
-    let matchedProd = null;
     for (const prod of activeProducts) {
       const keywords = [
         normalizeStr(prod.sabor),
@@ -655,20 +558,13 @@ function parseWhatsAppTextLive() {
       ].filter(k => k && k.length >= 3);
 
       if (keywords.some(kw => normSeg.includes(kw))) {
-        matchedProd = prod;
+        detected[prod.id] = (detected[prod.id] || 0) + qty;
         break;
       }
-    }
-
-    if (matchedProd) {
-      detected[matchedProd.id] = (detected[matchedProd.id] || 0) + qty;
-    } else {
-      unmatched.push(seg);
     }
   }
 
   state.waDraftItems = detected;
-  state.waUnmatchedLines = unmatched;
   renderWaParsedPreview();
 }
 
@@ -689,11 +585,7 @@ function renderWaParsedPreview() {
 
   const entries = Object.entries(state.waDraftItems);
   if (entries.length === 0) {
-    container.innerHTML = `
-      <div style="text-align: center; padding: 14px; color: #64748b; background: #f8fafc; border-radius: 6px;">
-        Pega el mensaje de WhatsApp a la izquierda para detectar cantidades.
-      </div>
-    `;
+    container.innerHTML = `<div style="padding: 12px; color: #64748b;">Pega un texto a la izquierda.</div>`;
     return;
   }
 
@@ -704,10 +596,8 @@ function renderWaParsedPreview() {
     totalUnits += qty;
 
     return `
-      <div style="display: flex; align-items: center; justify-content: space-between; padding: 5px 8px; border-bottom: 1px solid #e2e8f0;">
-        <div style="font-weight: 700;">
-          ${prod.nombre} <small style="color:#64748b;">(${prod.presentacion})</small>
-        </div>
+      <div style="display: flex; align-items: center; justify-content: space-between; padding: 4px 8px; border-bottom: 1px solid #e2e8f0;">
+        <span>${prod.nombre} <small style="color:#64748b;">(${prod.presentacion})</small></span>
         <div class="qty-control">
           <button type="button" class="qty-btn" onclick="adjustWaDraftQty('${prod.id}', -1)">−</button>
           <span class="qty-val">${qty}</span>
@@ -720,13 +610,9 @@ function renderWaParsedPreview() {
   container.innerHTML = `
     <div style="border: 1px solid #cbd5e1; border-radius: 6px; overflow: hidden;">
       ${rowsHtml}
-      <div style="background: #fdf2f8; padding: 6px 10px; display: flex; justify-content: space-between; align-items: center;">
-        <strong>TOTAL UNIDADES (${entries.length} productos):</strong>
-        <strong style="font-size: 14px; color: var(--yogule-pink);">${totalUnits} und.</strong>
-      </div>
     </div>
     <button type="button" class="btn btn-green btn-block" style="margin-top: 8px;" onclick="saveWhatsAppOrder()">
-      Registrar Pedido (${totalUnits} und. • PENDIENTE)
+      Guardar Pedido (${totalUnits} und.)
     </button>
   `;
 }
@@ -736,10 +622,7 @@ async function saveWhatsAppOrder() {
   const rawText = document.getElementById('waRawText').value.trim();
   const entries = Object.entries(state.waDraftItems);
 
-  if (!clientId || entries.length === 0) {
-    showToast('Selecciona un cliente y al menos 1 producto.');
-    return;
-  }
+  if (!clientId || entries.length === 0) return;
 
   const itemsPayload = entries.map(([prodId, qty]) => ({
     producto_id: prodId,
@@ -774,7 +657,7 @@ async function registerNewOrder(payload) {
     const code = `YOG-${String(nextNum).padStart(5, '0')}`;
     const nowIso = new Date().toISOString();
 
-    const newOrder = {
+    state.pedidos.unshift({
       id: tempId,
       numero_pedido: nextNum,
       codigo_pedido: code,
@@ -782,14 +665,9 @@ async function registerNewOrder(payload) {
       registrado_por_id: payload.registrado_por_id,
       estado: 'PENDIENTE',
       origen: payload.origen,
-      agencia_envio: 'Reparto Directo Yogulé',
-      texto_whatsapp: payload.texto_whatsapp || '',
-      observaciones: payload.observaciones || '',
-      total: 0,
       created_at: nowIso
-    };
+    });
 
-    state.pedidos.unshift(newOrder);
     payload.items.forEach((it, idx) => {
       state.detalles.push({
         id: `${tempId}-item-${idx}`,
@@ -797,29 +675,21 @@ async function registerNewOrder(payload) {
         producto_id: it.producto_id,
         cantidad: it.cantidad,
         precio_unitario: 0,
-        subtotal: 0,
         alistado: false
       });
-    });
-    state.trazabilidad.push({
-      id: `${tempId}-traza-1`,
-      pedido_id: tempId,
-      estado: 'PENDIENTE',
-      responsable_nombre: state.currentUser?.nombre_contacto || 'Usuario',
-      created_at: nowIso
     });
 
     state.pendingSyncQueue.push({ type: 'CREATE_ORDER', payload });
     saveLocalCache();
     updateSyncStatusUI();
     renderAll();
-    showToast(`Pedido ${code} guardado localmente (PENDIENTE).`);
+    showToast(`Pedido ${code} guardado`);
     return;
   }
 
   try {
     const created = await createOrderInSupabase(payload);
-    showToast(`Pedido ${created.codigo_pedido} registrado en PENDIENTE.`);
+    showToast(`Pedido ${created.codigo_pedido} creado`);
     await reloadFromSupabase(true);
   } catch (e) {
     console.error(e);
@@ -862,7 +732,7 @@ async function createOrderInSupabase(payload) {
 }
 
 // ============================================================================
-// 6. CARTERA DE CLIENTES + CONFIGURACIÓN DEL PEDIDO HABITUAL
+// 6. CARTERA DE CLIENTES (SIN DETALLE DE PEDIDO HABITUAL, SOLO 1 BOTÓN)
 // ============================================================================
 
 function toggleNewClientForm() {
@@ -877,9 +747,9 @@ async function handleCreateClient(e) {
     nombre_negocio: document.getElementById('ncBusiness').value.trim(),
     ciudad: document.getElementById('ncCity').value.trim(),
     region: document.getElementById('ncCity').value.trim(),
-    telefono_whatsapp: document.getElementById('ncPhone').value.trim(),
+    telefono_whatsapp: document.getElementById('ncPhone').value.trim() || '-',
     agencia_preferida: 'Reparto Directo Yogulé',
-    direccion_entrega: document.getElementById('ncAddress').value.trim(),
+    direccion_entrega: '',
     notas_necesidades: '',
     usuario: document.getElementById('ncUser').value.trim().toLowerCase(),
     password_hash: document.getElementById('ncPass').value.trim(),
@@ -894,10 +764,10 @@ async function handleCreateClient(e) {
       body: JSON.stringify(payload)
     });
     if (!res.ok) {
-      showToast('Ese usuario ya existe. Elige otro.');
+      showToast('Usuario ya existe');
       return;
     }
-    showToast(`Cliente ${payload.nombre_contacto} registrado.`);
+    showToast('Cliente guardado');
     document.getElementById('newClientForm').reset();
     toggleNewClientForm();
     await reloadFromSupabase(true);
@@ -911,51 +781,22 @@ function renderClientsPortfolio() {
   if (!grid) return;
 
   const clients = state.clientes.filter(c => c.rol === 'cliente');
-  grid.innerHTML = clients.map(c => {
-    const frec = state.frecuentes.filter(f => f.cliente_id === c.id);
-    const clientOrders = state.pedidos.filter(p => p.cliente_id === c.id);
-
-    const chipsHtml = frec.map(f => {
-      const prod = state.productos.find(p => p.id === f.producto_id);
-      return prod ? `<span class="need-chip"><b>${f.cantidad_habitual}</b> × ${prod.nombre}</span>` : '';
-    }).join('');
-
-    return `
-      <div class="card" style="display: flex; flex-direction: column; justify-content: space-between;">
-        <div>
-          <div style="display: flex; justify-content: space-between; align-items: center;">
-            <strong style="font-size: 13px;">${c.nombre_negocio}</strong>
-            <span style="font-size: 11px; font-weight: 700; color: var(--yogule-pink);">${c.ciudad}</span>
-          </div>
-          <div style="font-size: 12px; color: #475569;">
-            ${c.nombre_contacto} • Tel: ${c.telefono_whatsapp} • ${clientOrders.length} ped.
-          </div>
-          <div style="font-size: 11px; color: #64748b; margin-top: 2px;">
-            Usuario: <code>${c.usuario}</code> • Clave: <code>${c.password_visible}</code>
-          </div>
-
-          <div class="client-needs-box">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px;">
-              <strong style="font-size: 11px; color: #92400e;">Pedido Habitual:</strong>
-              <button type="button" class="btn btn-outline" style="padding: 1px 6px; font-size: 11px;" onclick="openManagerHabitualEditor('${c.id}')">
-                Definir / Editar
-              </button>
-            </div>
-            <div>${chipsHtml || '<small style="color:#78350f;">Sin configurar</small>'}</div>
-          </div>
+  grid.innerHTML = clients.map(c => `
+    <div class="card" style="display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px;">
+      <div style="min-width: 0;">
+        <div style="font-weight: 800; font-size: 13px; color: #0f172a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+          ${c.nombre_negocio} <span style="color: var(--yogule-pink); font-weight: 700;">(${c.ciudad})</span>
         </div>
-
-        <div style="display: flex; gap: 5px; margin-top: 4px;">
-          <button class="btn btn-primary" style="flex: 1;" onclick="quickCreateHabitualOrderForClient('${c.id}')">
-            Crear Pedido Habitual
-          </button>
-          <button class="btn btn-outline" onclick="loginWithCredentials('${c.usuario}', '${c.password_visible}')">
-            Ver Portal
-          </button>
+        <div style="font-size: 11px; color: #475569;">
+          ${c.nombre_contacto} • <code>${c.usuario}</code> / <code>${c.password_visible}</code>
         </div>
       </div>
-    `;
-  }).join('');
+
+      <button class="btn btn-outline" style="padding: 4px 9px; font-size: 11px;" onclick="openManagerHabitualEditor('${c.id}')">
+        Pedido Habitual
+      </button>
+    </div>
+  `).join('');
 }
 
 function openManagerHabitualEditor(clienteId) {
@@ -971,7 +812,7 @@ function openManagerHabitualEditor(clienteId) {
     });
 
   document.getElementById('managerHabitualEditorTitle').textContent =
-    `Pedido Habitual de: ${client.nombre_negocio} (${client.nombre_contacto})`;
+    `Pedido Habitual: ${client.nombre_negocio} (${client.ciudad})`;
   document.getElementById('managerHabitualEditorCard').style.display = 'block';
   renderManagerHabitualEditorGrid();
 }
@@ -1000,12 +841,10 @@ function renderManagerHabitualEditorGrid() {
   grid.innerHTML = activeProducts.map(p => {
     const qty = state.managerHabitualDraft[p.id] || 0;
     return `
-      <div class="product-card" style="border-color: ${qty > 0 ? 'var(--yogule-gold)' : 'var(--border-color)'};">
-        <div class="product-header">
-          <div style="min-width:0;">
-            <div style="font-weight: 700; font-size: 12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${p.nombre}</div>
-            <div style="font-size: 10px; color: #64748b;">${p.presentacion}</div>
-          </div>
+      <div class="product-card" style="border-color: ${qty > 0 ? 'var(--yogule-pink)' : 'var(--border-color)'};">
+        <div style="min-width:0;">
+          <div style="font-weight: 700; font-size: 12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${p.nombre}</div>
+          <div style="font-size: 10px; color: #64748b;">${p.presentacion}</div>
         </div>
         <div class="qty-control">
           <button type="button" class="qty-btn" onclick="changeManagerHabitualQty('${p.id}', -1)">−</button>
@@ -1023,29 +862,30 @@ async function saveManagerHabitualConfig() {
   closeManagerHabitualEditor();
 }
 
-async function quickCreateHabitualOrderForClient(clienteId) {
-  const client = state.clientes.find(c => c.id === clienteId);
-  const frec = state.frecuentes.filter(f => f.cliente_id === clienteId);
-  if (!client) return;
+async function createOrderFromManagerHabitualModal() {
+  const clienteId = state.managerEditingClientId;
+  if (!clienteId) return;
+  await saveHabitualForClient(clienteId, state.managerHabitualDraft);
 
-  if (frec.length === 0) {
-    showToast('Primero define qué productos componen su Pedido Habitual.');
-    openManagerHabitualEditor(clienteId);
+  const entries = Object.entries(state.managerHabitualDraft).filter(([, q]) => q > 0);
+  if (entries.length === 0) {
+    showToast('Asigna al menos 1 producto');
     return;
   }
 
-  const items = frec.map(f => ({
-    producto_id: f.producto_id,
-    cantidad: f.cantidad_habitual,
+  const items = entries.map(([prodId, qty]) => ({
+    producto_id: prodId,
+    cantidad: qty,
     precio_unitario: 0
   }));
 
+  closeManagerHabitualEditor();
   await registerNewOrder({
-    cliente_id: client.id,
-    registrado_por_id: state.currentUser?.id || client.id,
+    cliente_id: clienteId,
+    registrado_por_id: state.currentUser?.id || clienteId,
     origen: 'MANUAL_ENCARGADO',
     agencia_envio: 'Reparto Directo Yogulé',
-    observaciones: `Pedido habitual de ${client.nombre_negocio}.`,
+    observaciones: '',
     items
   });
 
@@ -1054,7 +894,7 @@ async function quickCreateHabitualOrderForClient(clienteId) {
 }
 
 // ============================================================================
-// 7. GESTIÓN DE PRODUCTOS (SIN PRECIOS NI STOCK)
+// 7. GESTIÓN DE PRODUCTOS (SIN CATEGORÍA, PRECIOS NI STOCK)
 // ============================================================================
 
 function toggleNewProductForm() {
@@ -1067,7 +907,6 @@ async function handleCreateProduct(e) {
   const name = document.getElementById('npName').value.trim();
   const flavor = document.getElementById('npFlavor').value.trim();
   const presentation = document.getElementById('npPresentation').value.trim();
-  const line = document.getElementById('npLine').value;
 
   const skuSuffix = normalizeStr(flavor).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4) || 'PROD';
   const sku = `YOG-${skuSuffix}-${Math.floor(100 + Math.random() * 900)}`;
@@ -1076,7 +915,7 @@ async function handleCreateProduct(e) {
   const payload = {
     sku,
     nombre: name,
-    linea: line,
+    linea: 'Yogulé',
     sabor: flavor,
     presentacion: presentation,
     precio: 0,
@@ -1091,14 +930,13 @@ async function handleCreateProduct(e) {
       headers: supaHeaders({ 'Prefer': 'return=representation' }),
       body: JSON.stringify(payload)
     });
-    if (!res.ok) throw new Error('No se pudo crear el producto');
-    showToast(`Producto "${name}" agregado al catálogo.`);
+    if (!res.ok) throw new Error('Error creando producto');
+    showToast(`Producto "${name}" agregado`);
     document.getElementById('newProductForm').reset();
     toggleNewProductForm();
     await reloadFromSupabase(true);
   } catch (err) {
     console.error(err);
-    showToast('Error guardando el producto.');
   }
 }
 
@@ -1115,7 +953,6 @@ async function toggleProductActive(prodId) {
       headers: supaHeaders(),
       body: JSON.stringify({ activo: prod.activo })
     });
-    showToast(prod.activo ? `${prod.nombre} activado` : `${prod.nombre} oculto`);
   } catch (e) {
     console.error(e);
   }
@@ -1126,20 +963,20 @@ function renderManagerProducts() {
   if (!grid) return;
 
   grid.innerHTML = state.productos.map(p => `
-    <div class="product-card" style="opacity: ${p.activo === false ? '0.5' : '1'};">
+    <div class="product-card" style="opacity: ${p.activo === false ? '0.45' : '1'};">
       <div style="min-width: 0;">
-        <div style="font-weight: 800; font-size: 12px; color: #0f172a; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+        <div style="font-weight: 700; font-size: 12px; color: #0f172a; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
           ${p.nombre}
         </div>
         <div style="font-size: 11px; color: #64748b;">
-          ${p.presentacion} • ${p.linea}
+          ${p.presentacion}
         </div>
       </div>
 
       <button
         type="button"
         class="btn ${p.activo === false ? 'btn-teal' : 'btn-outline'}"
-        style="padding: 3px 8px; font-size: 11px;"
+        style="padding: 2px 8px; font-size: 11px;"
         onclick="toggleProductActive('${p.id}')"
       >
         ${p.activo === false ? 'Activar' : 'Ocultar'}
@@ -1149,7 +986,7 @@ function renderManagerProducts() {
 }
 
 // ============================================================================
-// 8. PORTAL DEL CLIENTE (COMPACTO EN 1 PANTALLA • SOLO CANTIDADES)
+// 8. PORTAL DEL CLIENTE (MÍNIMO RUIDO VISUAL)
 // ============================================================================
 
 function initClientHabitualDraft(clienteId) {
@@ -1181,17 +1018,6 @@ function renderClientPortal() {
 
   const activeProducts = state.productos.filter(p => p.activo !== false);
 
-  const frec = state.frecuentes.filter(f => f.cliente_id === state.currentUser.id);
-  const frecChips = frec.map(f => {
-    const p = state.productos.find(pr => pr.id === f.producto_id);
-    return p ? `<span class="need-chip"><b>${f.cantidad_habitual}</b> × ${p.nombre}</span>` : '';
-  }).filter(Boolean).join('');
-
-  const summaryEl = document.getElementById('clientFrequentSummary');
-  if (summaryEl) {
-    summaryEl.innerHTML = frecChips || 'Aún no configurado (usa el botón "Configurar Habitual").';
-  }
-
   const catalogEl = document.getElementById('clientProductsCatalog');
   if (catalogEl) {
     catalogEl.innerHTML = activeProducts.map(p => {
@@ -1199,7 +1025,7 @@ function renderClientPortal() {
       return `
         <div class="product-card" style="border-color: ${qty > 0 ? 'var(--yogule-pink)' : 'var(--border-color)'}; background: ${qty > 0 ? '#fff0f6' : '#fff'};">
           <div style="min-width: 0;">
-            <div style="font-weight: 800; font-size: 12px; color: #0f172a; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+            <div style="font-weight: 700; font-size: 12px; color: #0f172a; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
               ${p.nombre}
             </div>
             <div style="font-size: 11px; color: #64748b;">${p.presentacion}</div>
@@ -1222,7 +1048,7 @@ function renderClientPortal() {
       return `
         <div class="product-card" style="border-color: ${qty > 0 ? 'var(--yogule-gold)' : 'var(--border-color)'}; background: ${qty > 0 ? '#fffbeb' : '#fff'};">
           <div style="min-width: 0;">
-            <div style="font-weight: 800; font-size: 12px; color: #0f172a; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+            <div style="font-weight: 700; font-size: 12px; color: #0f172a; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
               ${p.nombre}
             </div>
             <div style="font-size: 11px; color: #64748b;">${p.presentacion}</div>
@@ -1247,7 +1073,7 @@ function renderClientPortal() {
   const myOrdersList = document.getElementById('clientMyOrdersList');
   if (myOrdersList) {
     myOrdersList.innerHTML = myOrders.length === 0
-      ? `<div class="card" style="text-align: center; padding: 16px;">Aún no tienes pedidos registrados.</div>`
+      ? `<div class="card" style="text-align: center; padding: 14px;">Sin pedidos registrados.</div>`
       : myOrders.map(o => renderOrderCardHTML(o, false)).join('');
   }
 }
@@ -1296,7 +1122,7 @@ async function saveHabitualForClient(clienteId, draftMap) {
         cliente_id: clienteId,
         producto_id: prodId,
         cantidad_habitual: qty,
-        nota: 'Configurado'
+        nota: ''
       });
     }
   });
@@ -1307,13 +1133,13 @@ async function saveHabitualForClient(clienteId, draftMap) {
     state.pendingSyncQueue.push({ type: 'SAVE_HABITUAL', cliente_id: clienteId, draftMap });
     saveLocalCache();
     updateSyncStatusUI();
-    showToast('Pedido Habitual guardado localmente.');
+    showToast('Pedido Habitual guardado');
     return;
   }
 
   try {
     await persistClientHabitualInSupabase(clienteId, draftMap);
-    showToast('Pedido Habitual guardado en Supabase.');
+    showToast('Pedido Habitual guardado');
     await reloadFromSupabase(true);
   } catch (e) {
     console.error(e);
@@ -1332,7 +1158,7 @@ async function persistClientHabitualInSupabase(clienteId, draftMap) {
       cliente_id: clienteId,
       producto_id: prodId,
       cantidad_habitual: qty,
-      nota: 'Pedido habitual definido'
+      nota: ''
     }));
 
   if (rows.length > 0) {
@@ -1348,7 +1174,7 @@ function loadClientFrequentItemsToCart() {
   if (!state.currentUser) return;
   const frec = state.frecuentes.filter(f => f.cliente_id === state.currentUser.id);
   if (frec.length === 0) {
-    showToast('Primero configura tu Pedido Habitual.');
+    showToast('Primero configura tu Pedido Habitual');
     switchClientTab('habitualConfig');
     return;
   }
@@ -1358,35 +1184,24 @@ function loadClientFrequentItemsToCart() {
     state.clientCart[f.producto_id] = f.cantidad_habitual;
   });
   renderClientPortal();
-  showToast('Pedido Habitual cargado.');
 }
 
 function renderClientCartSummary() {
   const entries = Object.entries(state.clientCart);
   const textEl = document.getElementById('clientCartText');
   const totalUnitsEl = document.getElementById('clientCartTotalUnits');
-  const detailEl = document.getElementById('clientCartItemsDetail');
   const submitArea = document.getElementById('clientCartSubmitArea');
 
   if (entries.length === 0) {
-    textEl.textContent = 'Selecciona las cantidades arriba o carga tu Pedido Habitual.';
+    textEl.textContent = '0 unidades seleccionadas';
     if (totalUnitsEl) totalUnitsEl.textContent = '0';
-    detailEl.innerHTML = '';
     submitArea.style.display = 'none';
     return;
   }
 
-  let totalUnits = 0;
-  const chips = entries.map(([prodId, qty]) => {
-    const p = state.productos.find(pr => pr.id === prodId);
-    if (!p) return '';
-    totalUnits += qty;
-    return `<span class="need-chip"><b>${qty}</b> × ${p.nombre}</span>`;
-  }).join('');
-
-  textEl.textContent = `Resumen (${entries.length} productos • ${totalUnits} unidades):`;
+  const totalUnits = entries.reduce((sum, [, qty]) => sum + qty, 0);
+  textEl.textContent = `${entries.length} producto(s) • ${totalUnits} unidades en total`;
   if (totalUnitsEl) totalUnitsEl.textContent = totalUnits;
-  detailEl.innerHTML = chips;
   submitArea.style.display = 'flex';
 }
 
@@ -1394,8 +1209,6 @@ async function submitClientOrder() {
   if (!state.currentUser) return;
   const entries = Object.entries(state.clientCart);
   if (entries.length === 0) return;
-
-  const notes = document.getElementById('clientOrderNotes').value.trim();
 
   const itemsPayload = entries.map(([prodId, qty]) => ({
     producto_id: prodId,
@@ -1408,12 +1221,11 @@ async function submitClientOrder() {
     registrado_por_id: state.currentUser.id,
     origen: 'PORTAL_CLIENTE',
     agencia_envio: 'Reparto Directo Yogulé',
-    observaciones: notes,
+    observaciones: '',
     items: itemsPayload
   });
 
   state.clientCart = {};
-  document.getElementById('clientOrderNotes').value = '';
   switchClientTab('myOrders');
 }
 
@@ -1461,7 +1273,7 @@ function showToast(msg) {
   container.appendChild(el);
   setTimeout(() => {
     el.remove();
-  }, 3500);
+  }, 3000);
 }
 
 function renderAll() {
