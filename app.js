@@ -366,7 +366,7 @@ function renderOrderCardHTML(pedido, isManagerView) {
           </div>
         </div>
         <div style="text-align: right; white-space: nowrap;">
-          <strong style="font-size: 13px; color: var(--yogule-pink);">${totalUnits} und.</strong>
+          <strong style="font-size: 13px; color: #0f172a;">${totalUnits} und.</strong>
           <span style="font-size: 11px; color: #64748b; margin-left: 4px;">${formatDateTime(pedido.created_at)}</span>
         </div>
       </div>
@@ -379,7 +379,7 @@ function renderOrderCardHTML(pedido, isManagerView) {
             <div class="checklist-item ${item.alistado ? 'checked' : ''}" onclick="${isManagerView ? `toggleItemChecklist('${item.id}')` : ''}">
               <div class="check-box-ui">${item.alistado ? '✓' : ''}</div>
               <div style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                <strong style="color: var(--yogule-pink);">${item.cantidad}</strong> × ${prod.nombre}
+                <strong>${item.cantidad}</strong> × ${prod.nombre}
               </div>
             </div>
           `;
@@ -785,7 +785,7 @@ function renderClientsPortfolio() {
     <div class="card" style="display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px;">
       <div style="min-width: 0;">
         <div style="font-weight: 800; font-size: 13px; color: #0f172a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-          ${c.nombre_negocio} <span style="color: var(--yogule-pink); font-weight: 700;">(${c.ciudad})</span>
+          ${c.nombre_negocio} <span style="color: #475569; font-weight: 600;">(${c.ciudad})</span>
         </div>
         <div style="font-size: 11px; color: #475569;">
           ${c.nombre_contacto} • <code>${c.usuario}</code> / <code>${c.password_visible}</code>
@@ -841,7 +841,7 @@ function renderManagerHabitualEditorGrid() {
   grid.innerHTML = activeProducts.map(p => {
     const qty = state.managerHabitualDraft[p.id] || 0;
     return `
-      <div class="product-card" style="border-color: ${qty > 0 ? 'var(--yogule-pink)' : 'var(--border-color)'};">
+      <div class="product-card ${qty > 0 ? 'selected-card' : ''}">
         <div style="min-width:0;">
           <div style="font-weight: 700; font-size: 12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${p.nombre}</div>
           <div style="font-size: 10px; color: #64748b;">${p.presentacion}</div>
@@ -1023,7 +1023,7 @@ function renderClientPortal() {
     catalogEl.innerHTML = activeProducts.map(p => {
       const qty = state.clientCart[p.id] || 0;
       return `
-        <div class="product-card" style="border-color: ${qty > 0 ? 'var(--yogule-pink)' : 'var(--border-color)'}; background: ${qty > 0 ? '#fff0f6' : '#fff'};">
+        <div class="product-card ${qty > 0 ? 'selected-card' : ''}">
           <div style="min-width: 0;">
             <div style="font-weight: 700; font-size: 12px; color: #0f172a; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
               ${p.nombre}
@@ -1046,7 +1046,7 @@ function renderClientPortal() {
     habitualGridEl.innerHTML = activeProducts.map(p => {
       const qty = state.clientHabitualDraft[p.id] || 0;
       return `
-        <div class="product-card" style="border-color: ${qty > 0 ? 'var(--yogule-gold)' : 'var(--border-color)'}; background: ${qty > 0 ? '#fffbeb' : '#fff'};">
+        <div class="product-card ${qty > 0 ? 'selected-card' : ''}">
           <div style="min-width: 0;">
             <div style="font-weight: 700; font-size: 12px; color: #0f172a; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
               ${p.nombre}

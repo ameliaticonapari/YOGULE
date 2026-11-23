@@ -120,16 +120,16 @@
             </div>
           </div>
 
-          <div style="display: flex; gap: 6px; align-items: center;">
+          <div class="filter-inputs-row">
             <input
               type="text"
               id="searchOrdersInput"
               class="form-input"
-              style="width: 170px; padding: 4px 8px;"
+              style="flex: 1;"
               placeholder="Buscar cliente o código..."
               oninput="renderManagerOrders()"
             />
-            <select id="cityFilterSelect" class="form-select" style="width: 135px; padding: 4px 8px;" onchange="renderManagerOrders()">
+            <select id="cityFilterSelect" class="form-select" style="width: 125px;" onchange="renderManagerOrders()">
               <option value="TODAS">Todas</option>
             </select>
           </div>
@@ -140,7 +140,7 @@
 
       <!-- SUB-VISTA B: PEGAR TEXTO DE WHATSAPP -->
       <section id="managerTabWhatsapp" style="display: none;">
-        <div class="login-container" style="grid-template-columns: 1fr 1fr;">
+        <div class="wa-split-grid">
           <div class="card">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
               <div class="card-title">Mensaje de WhatsApp</div>
@@ -219,7 +219,7 @@
         </form>
 
         <!-- Panel emergente cuando se toca el botón "Pedido Habitual" de un cliente -->
-        <div id="managerHabitualEditorCard" class="card" style="display: none; margin-bottom: 8px; border: 2px solid var(--yogule-pink);">
+        <div id="managerHabitualEditorCard" class="card" style="display: none; margin-bottom: 8px; border: 2px solid var(--primary-accent);">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; flex-wrap: wrap; gap: 6px;">
             <strong id="managerHabitualEditorTitle">Pedido Habitual</strong>
             <div style="display: flex; gap: 6px;">
@@ -274,7 +274,7 @@
          ====================================================================== -->
     <main id="clientView" style="display: none;">
 
-      <nav class="main-nav">
+      <nav class="main-nav client-nav">
         <button class="nav-tab active" id="clientTabBtnOrder" onclick="switchClientTab('newOrder')">
           Hacer Pedido
         </button>
@@ -297,7 +297,7 @@
 
         <div id="clientProductsCatalog" class="products-grid" style="margin-bottom: 8px;"></div>
 
-        <div id="clientCartBox" class="card" style="border: 1.5px solid var(--yogule-pink);">
+        <div id="clientCartBox" class="card" style="border: 1.5px solid var(--primary-accent);">
           <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px;">
             <strong id="clientCartText">0 unidades seleccionadas</strong>
 
