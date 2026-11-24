@@ -1,5 +1,5 @@
 /* ============================================================================
-   LÓGICA OPERATIVA MINIMALISTA • CERO RUIDO VISUAL • SOLO CANTIDADES
+   LÓGICA OPERATIVA CON MENÚ HAMBURGUESA + BOTÓN PEQUEÑO DE CONEXIÓN + UI VIVA
    Conectado en vivo a Supabase (Sin RLS) + Modo Offline
    Proyecto Supabase: https://bpaxkwzbknmntqdsdzwu.supabase.co
    ============================================================================ */
@@ -9,8 +9,11 @@ const SUPABASE_KEY = 'sb_publishable_i6WIsrxYj12TyQeaCyJ4mg_tMNq7QGn';
 
 const state = {
   isOfflineSimulated: false,
+  viewportMode: 'desktop',
   pendingSyncQueue: [],
   currentUser: null,
+  activeManagerTab: 'orders',
+  activeClientTab: 'newOrder',
   orderFilter: 'PENDIENTE',
   clientes: [],
   productos: [],
@@ -35,7 +38,7 @@ function supaHeaders(extra = {}) {
 }
 
 // ============================================================================
-// 1. CARGA Y SINCRONIZACIÓN CON SUPABASE + MODO OFFLINE
+// 1. CARGA Y SINCRONIZACIÓN CON SUPABASE + BOTÓN PEQUEÑO DE CONEXIÓN
 // ============================================================================
 
 async function initApp() {
@@ -106,7 +109,7 @@ async function reloadFromSupabase(silent = false) {
     updateSyncStatusUI();
     renderAll();
 
-    if (!silent) showToast('Actualizado');
+    if (!silent) showToast('Sincronizado con Supabase');
   } catch (err) {
     console.error(err);
     updateSyncStatusUI(true);
@@ -141,37 +144,170 @@ async function flushOfflineQueue() {
       console.error(e);
     }
   }
+  showToast(`Sincronizados ${queueCopy.length} cambio(s) en cola`);
 }
 
 function toggleOfflineMode() {
   state.isOfflineSimulated = !state.isOfflineSimulated;
   updateSyncStatusUI();
-  if (!state.isOfflineSimulated) {
+  if (state.isOfflineSimulated) {
+    showToast('Modo Sin Internet (guardando en celular)');
+  } else {
+    showToast('Conectado • Sincronizando...');
     reloadFromSupabase(true);
   }
 }
 
 function updateSyncStatusUI(hasError = false) {
-  const pill = document.getElementById('syncStatusPill');
-  const text = document.getElementById('syncStatusText');
-  const btn = document.getElementById('btnOfflineToggle');
-  const qCount = state.pendingSyncQueue.length;
+  const btn = document.getElementById('connMiniBtn');
+  const text = document.getElementById('connMiniText');
+  if (!btn || !text) return;
 
+  const qCount = state.pendingSyncQueue.length;
   if (state.isOfflineSimulated || hasError) {
-    pill.className = 'sync-pill offline';
-    text.textContent = `Sin Internet (${qCount})`;
-    btn.textContent = 'Conectar';
-    btn.classList.add('active');
+    btn.className = 'conn-mini-btn offline';
+    text.textContent = qCount > 0 ? `Offline (${qCount})` : 'Offline';
   } else {
-    pill.className = 'sync-pill online';
-    text.textContent = 'En Línea';
-    btn.textContent = 'Modo Sin Internet';
-    btn.classList.remove('active');
+    btn.className = 'conn-mini-btn online';
+    text.textContent = 'Online';
   }
 }
 
 // ============================================================================
-// 2. INICIO DE SESIÓN
+// 2. MENÚ HAMBURGUESA DESLIZABLE (DRAWER) Y BARRA SUPERIOR
+// ============================================================================
+
+function openHamburgerDrawer() {
+  renderHamburgerMenu();
+  document.getElementById('drawerBackdrop').classList.add('open');
+  document.getElementById('sideDrawer').classList.add('open');
+}
+
+function closeHamburgerDrawer() {
+  document.getElementById('drawerBackdrop').classList.remove('open');
+  document.getElementById('sideDrawer').classList.remove('open');
+}
+
+function renderHamburgerMenu() {
+  const avatarEl = document.getElementById('drawerAvatar');
+  const nameEl = document.getElementById('drawerUserName');
+  const subEl = document.getElementById('drawerUserSub');
+  const listEl = document.getElementById('drawerMenuList');
+  const logoutBtn = document.getElementById('drawerLogoutBtn');
+  const pendingCount = state.pedidos.filter(p => p.estado === 'PENDIENTE').length;
+
+  const hbBadge = document.getElementById('hamburgerPendingBadge');
+  if (hbBadge) {
+    if (state.currentUser?.rol === 'encargado' && pendingCount > 0) {
+      hbBadge.style.display = 'flex';
+      hbBadge.textContent = pendingCount;
+    } else {
+      hbBadge.style.display = 'none';
+    }
+  }
+
+  if (!state.currentUser) {
+    avatarEl.textContent = '🔐';
+    nameEl.textContent = 'YOGULÉ • Pedidos';
+    subEl.textContent = 'Inicia sesión para continuar';
+    logoutBtn.style.display = 'none';
+
+    listEl.innerHTML = `
+      <div style="font-size: 11px; color: #64748b; padding: 6px 8px; font-weight: 700;">
+        CUENTAS RÁPIDAS DE PRUEBA:
+      </div>
+      ${state.clientes.map(c => `
+        <button type="button" class="drawer-item" onclick="loginWithCredentials('${c.usuario}', '${c.password_visible}'); closeHamburgerDrawer();">
+          <span class="drawer-item-left">
+            <span>${c.rol === 'encargado' ? '👩‍💼' : '🏪'}</span>
+            <span>${c.nombre_contacto} (${c.ciudad})</span>
+          </span>
+        </button>
+      `).join('')}
+    `;
+    return;
+  }
+
+  logoutBtn.style.display = 'inline-flex';
+
+  if (state.currentUser.rol === 'encargado') {
+    avatarEl.textContent = '👩‍💼';
+    nameEl.textContent = state.currentUser.nombre_contacto;
+    subEl.textContent = 'Encargada de Pedidos Yogulé';
+
+    const items = [
+      { id: 'orders', icon: '📦', label: 'Pedidos y Trazabilidad', badge: pendingCount },
+      { id: 'whatsapp', icon: '💬', label: 'Pegar de WhatsApp' },
+      { id: 'clients', icon: '👥', label: 'Cartera de Clientes' },
+      { id: 'products', icon: '🥛', label: 'Catálogo de Productos' }
+    ];
+
+    listEl.innerHTML = items.map(it => `
+      <button type="button" class="drawer-item ${state.activeManagerTab === it.id ? 'active' : ''}" onclick="switchManagerTab('${it.id}'); closeHamburgerDrawer();">
+        <span class="drawer-item-left">
+          <span>${it.icon}</span>
+          <span>${it.label}</span>
+        </span>
+        ${it.badge ? `<span class="drawer-count-pill">${it.badge}</span>` : ''}
+      </button>
+    `).join('');
+  } else {
+    avatarEl.textContent = '🏪';
+    nameEl.textContent = state.currentUser.nombre_negocio;
+    subEl.textContent = `${state.currentUser.nombre_contacto} • ${state.currentUser.ciudad}`;
+
+    const myOrdersCount = state.pedidos.filter(p => p.cliente_id === state.currentUser.id).length;
+    const items = [
+      { id: 'newOrder', icon: '🛒', label: 'Hacer Pedido' },
+      { id: 'habitualConfig', icon: '⭐', label: 'Mi Pedido Habitual' },
+      { id: 'myOrders', icon: '🚚', label: 'Mis Pedidos y Estado', badge: myOrdersCount }
+    ];
+
+    listEl.innerHTML = items.map(it => `
+      <button type="button" class="drawer-item ${state.activeClientTab === it.id ? 'active' : ''}" onclick="switchClientTab('${it.id}'); closeHamburgerDrawer();">
+        <span class="drawer-item-left">
+          <span>${it.icon}</span>
+          <span>${it.label}</span>
+        </span>
+        ${it.badge ? `<span class="drawer-count-pill">${it.badge}</span>` : ''}
+      </button>
+    `).join('');
+  }
+}
+
+function updateTopbarTitles() {
+  const titleEl = document.getElementById('topbarSectionTitle');
+  const subEl = document.getElementById('topbarSubtitle');
+  if (!titleEl || !subEl) return;
+
+  if (!state.currentUser) {
+    titleEl.textContent = 'YOGULÉ • Pedidos';
+    subEl.textContent = 'Acceso de Clientes y Encargada';
+    return;
+  }
+
+  if (state.currentUser.rol === 'encargado') {
+    const titles = {
+      orders: '📦 Pedidos Nacionales',
+      whatsapp: '💬 Pegar de WhatsApp',
+      clients: '👥 Cartera de Clientes',
+      products: '🥛 Productos Yogulé'
+    };
+    titleEl.textContent = titles[state.activeManagerTab] || 'Pedidos';
+    subEl.textContent = `${state.currentUser.nombre_contacto} • Toca ☰ para cambiar sección`;
+  } else {
+    const titles = {
+      newOrder: '🛒 Hacer Pedido',
+      habitualConfig: '⭐ Mi Pedido Habitual',
+      myOrders: '🚚 Mis Pedidos'
+    };
+    titleEl.textContent = titles[state.activeClientTab] || 'Hacer Pedido';
+    subEl.textContent = `${state.currentUser.nombre_negocio} (${state.currentUser.ciudad})`;
+  }
+}
+
+// ============================================================================
+// 3. INICIO DE SESIÓN
 // ============================================================================
 
 async function handleManualLogin(e) {
@@ -222,8 +358,6 @@ function setActiveUser(userObj) {
   initClientHabitualDraft(userObj.id);
 
   document.getElementById('loginView').style.display = 'none';
-  document.getElementById('userSessionBox').style.display = 'flex';
-  document.getElementById('sessionUserName').textContent = `${userObj.nombre_contacto} (${userObj.ciudad})`;
 
   if (userObj.rol === 'encargado') {
     document.getElementById('managerView').style.display = 'block';
@@ -242,7 +376,8 @@ function logout() {
   document.getElementById('loginView').style.display = 'block';
   document.getElementById('managerView').style.display = 'none';
   document.getElementById('clientView').style.display = 'none';
-  document.getElementById('userSessionBox').style.display = 'none';
+  updateTopbarTitles();
+  renderHamburgerMenu();
   renderQuickLoginList();
 }
 
@@ -251,7 +386,7 @@ function renderQuickLoginList() {
   if (!container) return;
 
   if (state.clientes.length === 0) {
-    container.innerHTML = `<div style="padding:6px; color:#64748b;">Cargando...</div>`;
+    container.innerHTML = `<div style="padding:6px; color:#64748b;">Cargando cuentas...</div>`;
     return;
   }
 
@@ -259,16 +394,19 @@ function renderQuickLoginList() {
     const isManager = c.rol === 'encargado';
     return `
       <button type="button" class="quick-login-item ${isManager ? 'manager' : ''}" onclick="loginWithCredentials('${c.usuario}', '${c.password_visible}')">
-        <div>
-          <div style="font-weight: 700; color: #0f172a;">
-            ${c.nombre_contacto} (${c.ciudad})
-          </div>
-          <div style="font-size: 11px; color: #64748b;">
-            <code>${c.usuario}</code> / <code>${c.password_visible}</code>
+        <div style="display: flex; align-items: center; gap: 8px; min-width: 0;">
+          <span style="font-size: 17px;">${isManager ? '👩‍💼' : '🏪'}</span>
+          <div style="min-width: 0;">
+            <div style="font-weight: 800; color: #0f172a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+              ${isManager ? c.nombre_contacto : c.nombre_negocio}
+            </div>
+            <div style="font-size: 11px; color: #475569;">
+              ${c.ciudad} • <code>${c.usuario}</code>
+            </div>
           </div>
         </div>
-        <span class="btn ${isManager ? 'btn-primary' : 'btn-outline'}" style="padding: 2px 7px; font-size: 11px;">
-          Entrar
+        <span class="btn ${isManager ? 'btn-primary' : 'btn-outline'}" style="padding: 3px 8px; font-size: 11px;">
+          Entrar ➔
         </span>
       </button>
     `;
@@ -276,16 +414,15 @@ function renderQuickLoginList() {
 }
 
 // ============================================================================
-// 3. TARJETAS DE PEDIDOS SIN RUIDO VISUAL
+// 4. PANEL ENCARGADA: TARJETAS DE PEDIDOS VIVAS Y LIMPIAS
 // ============================================================================
 
 function switchManagerTab(tabName) {
+  state.activeManagerTab = tabName;
   const tabs = ['orders', 'whatsapp', 'clients', 'products'];
   tabs.forEach(t => {
     const sec = document.getElementById('managerTab' + t.charAt(0).toUpperCase() + t.slice(1));
-    const btn = document.getElementById('tabBtn' + t.charAt(0).toUpperCase() + t.slice(1));
     if (sec) sec.style.display = t === tabName ? 'block' : 'none';
-    if (btn) btn.classList.toggle('active', t === tabName);
   });
 
   if (tabName === 'whatsapp') {
@@ -294,6 +431,7 @@ function switchManagerTab(tabName) {
       loadSampleWhatsApp(1);
     }
   }
+  updateTopbarTitles();
   renderAll();
 }
 
@@ -315,7 +453,6 @@ function renderManagerOrders() {
   document.getElementById('countRecibido').textContent = countR;
   document.getElementById('countEntregado').textContent = countE;
   document.getElementById('countTodos').textContent = state.pedidos.length;
-  document.getElementById('badgePendingCount').textContent = countP;
 
   const citySelect = document.getElementById('cityFilterSelect');
   const currentCity = citySelect.value || 'TODAS';
@@ -338,7 +475,7 @@ function renderManagerOrders() {
 
   const listEl = document.getElementById('managerOrdersList');
   if (filtered.length === 0) {
-    listEl.innerHTML = `<div class="card" style="text-align: center; padding: 14px; color:#64748b;">Sin pedidos en ${state.orderFilter}</div>`;
+    listEl.innerHTML = `<div class="card" style="text-align: center; padding: 18px; color:#64748b;">No hay pedidos en esta bandeja (${state.orderFilter})</div>`;
     return;
   }
 
@@ -353,32 +490,36 @@ function renderOrderCardHTML(pedido, isManagerView) {
   };
   const items = state.detalles.filter(d => d.pedido_id === pedido.id);
   const totalUnits = items.reduce((sum, it) => sum + Number(it.cantidad || 0), 0);
+  const checkedCount = items.filter(i => i.alistado).length;
+  const pct = items.length > 0 ? Math.round((checkedCount / items.length) * 100) : 0;
 
   return `
     <article class="order-card estado-${pedido.estado}">
-      <!-- CABECERA EN 1 LÍNEA: Código + Cliente + Ciudad | Unidades + Fecha -->
       <div class="order-card-header">
-        <div>
+        <div style="min-width: 0;">
           <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
             <span class="order-code-badge">${pedido.codigo_pedido}</span>
             <strong style="font-size: 13px; color: #0f172a;">${cliente.nombre_negocio}</strong>
-            <span style="font-size: 12px; color: #64748b;">(${cliente.nombre_contacto} • ${cliente.ciudad})</span>
+          </div>
+          <div style="font-size: 11px; color: #64748b; margin-top: 2px;">
+            👤 ${cliente.nombre_contacto} • 📍 ${cliente.ciudad} • 🕒 ${formatDateTime(pedido.created_at)}
           </div>
         </div>
-        <div style="text-align: right; white-space: nowrap;">
-          <strong style="font-size: 13px; color: #0f172a;">${totalUnits} und.</strong>
-          <span style="font-size: 11px; color: #64748b; margin-left: 4px;">${formatDateTime(pedido.created_at)}</span>
-        </div>
+        <span class="units-pill">${totalUnits} und.</span>
       </div>
 
-      <!-- PRODUCTOS DIRECTOS (SIN CAJAS NI TEXTOS REPETIDOS) -->
-      <div class="checklist-grid" style="margin-bottom: 8px;">
+      <div class="order-progress-track" title="${checkedCount} de ${items.length} productos alistados">
+        <div class="order-progress-fill" style="width: ${pct}%;"></div>
+      </div>
+
+      <div class="checklist-grid">
         ${items.map(item => {
-          const prod = state.productos.find(pr => pr.id === item.producto_id) || { nombre: 'Producto' };
+          const prod = state.productos.find(pr => pr.id === item.producto_id) || { nombre: 'Producto', icono_emoji: '🥛' };
           return `
             <div class="checklist-item ${item.alistado ? 'checked' : ''}" onclick="${isManagerView ? `toggleItemChecklist('${item.id}')` : ''}">
               <div class="check-box-ui">${item.alistado ? '✓' : ''}</div>
               <div style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                <span>${prod.icono_emoji || '🥛'}</span>
                 <strong>${item.cantidad}</strong> × ${prod.nombre}
               </div>
             </div>
@@ -386,22 +527,24 @@ function renderOrderCardHTML(pedido, isManagerView) {
         }).join('')}
       </div>
 
-      <!-- FILA INFERIOR ÚNICA: ESTADO ACTUAL + BOTÓN DE AVANCE -->
       <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-top: 6px; border-top: 1px solid #f1f5f9;">
-        <span class="status-badge ${pedido.estado}">
-          ${pedido.estado === 'PENDIENTE' ? '1. Pendiente' : pedido.estado === 'RECIBIDO' ? '2. Recibido' : '3. Entregado'}
-        </span>
+        <div class="mini-trace-dots">
+          <span class="trace-dot active-${pedido.estado}"></span>
+          <span style="color: #334155;">
+            ${pedido.estado === 'PENDIENTE' ? '1. Pendiente' : pedido.estado === 'RECIBIDO' ? '2. Recibido' : '3. Entregado'}
+          </span>
+        </div>
 
         ${isManagerView ? `
           <div>
             ${pedido.estado === 'PENDIENTE' ? `
-              <button class="btn btn-blue" style="padding: 4px 10px;" onclick="advanceOrderStatus('${pedido.id}', 'RECIBIDO')">
-                Pasar a Recibido ➔
+              <button class="btn btn-blue" style="padding: 4px 11px;" onclick="advanceOrderStatus('${pedido.id}', 'RECIBIDO')">
+                Marcar Recibido ➔
               </button>
             ` : ''}
             ${pedido.estado === 'RECIBIDO' ? `
-              <button class="btn btn-green" style="padding: 4px 10px;" onclick="advanceOrderStatus('${pedido.id}', 'ENTREGADO')">
-                Pasar a Entregado ➔
+              <button class="btn btn-primary" style="padding: 4px 11px;" onclick="advanceOrderStatus('${pedido.id}', 'ENTREGADO')">
+                Marcar Entregado ✓
               </button>
             ` : ''}
           </div>
@@ -482,7 +625,7 @@ async function advanceOrderStatus(pedidoId, nuevoEstado) {
       })
     });
     if (res.ok) {
-      showToast(`${pedido.codigo_pedido}: ${nuevoEstado}`);
+      showToast(`${pedido.codigo_pedido} → ${nuevoEstado}`);
       await reloadFromSupabase(true);
     }
   } catch (e) {
@@ -491,7 +634,7 @@ async function advanceOrderStatus(pedidoId, nuevoEstado) {
 }
 
 // ============================================================================
-// 4. PARSER DE TEXTO DE WHATSAPP
+// 5. PARSER DE TEXTO DE WHATSAPP
 // ============================================================================
 
 function populateWaClientsSelect() {
@@ -585,7 +728,7 @@ function renderWaParsedPreview() {
 
   const entries = Object.entries(state.waDraftItems);
   if (entries.length === 0) {
-    container.innerHTML = `<div style="padding: 12px; color: #64748b;">Pega un texto a la izquierda.</div>`;
+    container.innerHTML = `<div style="padding: 12px; color: #64748b;">Pega un mensaje a la izquierda.</div>`;
     return;
   }
 
@@ -596,8 +739,8 @@ function renderWaParsedPreview() {
     totalUnits += qty;
 
     return `
-      <div style="display: flex; align-items: center; justify-content: space-between; padding: 4px 8px; border-bottom: 1px solid #e2e8f0;">
-        <span>${prod.nombre} <small style="color:#64748b;">(${prod.presentacion})</small></span>
+      <div style="display: flex; align-items: center; justify-content: space-between; padding: 5px 8px; border-bottom: 1px solid #e2e8f0;">
+        <span>${prod.icono_emoji || '🥛'} <strong>${prod.nombre}</strong> <small style="color:#64748b;">(${prod.presentacion})</small></span>
         <div class="qty-control">
           <button type="button" class="qty-btn" onclick="adjustWaDraftQty('${prod.id}', -1)">−</button>
           <span class="qty-val">${qty}</span>
@@ -608,11 +751,11 @@ function renderWaParsedPreview() {
   }).join('');
 
   container.innerHTML = `
-    <div style="border: 1px solid #cbd5e1; border-radius: 6px; overflow: hidden;">
+    <div style="border: 1px solid #cbd5e1; border-radius: 8px; overflow: hidden;">
       ${rowsHtml}
     </div>
-    <button type="button" class="btn btn-green btn-block" style="margin-top: 8px;" onclick="saveWhatsAppOrder()">
-      Guardar Pedido (${totalUnits} und.)
+    <button type="button" class="btn btn-primary btn-block" style="margin-top: 8px; padding: 8px;" onclick="saveWhatsAppOrder()">
+      Registrar Pedido (${totalUnits} und.) ➔
     </button>
   `;
 }
@@ -647,7 +790,7 @@ async function saveWhatsAppOrder() {
 }
 
 // ============================================================================
-// 5. REGISTRO DE PEDIDOS EN SUPABASE
+// 6. REGISTRO DE PEDIDOS EN SUPABASE
 // ============================================================================
 
 async function registerNewOrder(payload) {
@@ -683,13 +826,13 @@ async function registerNewOrder(payload) {
     saveLocalCache();
     updateSyncStatusUI();
     renderAll();
-    showToast(`Pedido ${code} guardado`);
+    showToast(`Pedido ${code} guardado en celular`);
     return;
   }
 
   try {
     const created = await createOrderInSupabase(payload);
-    showToast(`Pedido ${created.codigo_pedido} creado`);
+    showToast(`¡Pedido ${created.codigo_pedido} enviado!`);
     await reloadFromSupabase(true);
   } catch (e) {
     console.error(e);
@@ -732,7 +875,7 @@ async function createOrderInSupabase(payload) {
 }
 
 // ============================================================================
-// 6. CARTERA DE CLIENTES (SIN DETALLE DE PEDIDO HABITUAL, SOLO 1 BOTÓN)
+// 7. CARTERA DE CLIENTES (LIMPIA, CON BOTÓN DE PEDIDO HABITUAL)
 // ============================================================================
 
 function toggleNewClientForm() {
@@ -767,7 +910,7 @@ async function handleCreateClient(e) {
       showToast('Usuario ya existe');
       return;
     }
-    showToast('Cliente guardado');
+    showToast('Cliente registrado');
     document.getElementById('newClientForm').reset();
     toggleNewClientForm();
     await reloadFromSupabase(true);
@@ -782,18 +925,18 @@ function renderClientsPortfolio() {
 
   const clients = state.clientes.filter(c => c.rol === 'cliente');
   grid.innerHTML = clients.map(c => `
-    <div class="card" style="display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px;">
+    <div class="card" style="display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 9px 11px;">
       <div style="min-width: 0;">
         <div style="font-weight: 800; font-size: 13px; color: #0f172a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-          ${c.nombre_negocio} <span style="color: #475569; font-weight: 600;">(${c.ciudad})</span>
+          🏪 ${c.nombre_negocio} <span style="color: #0f766e; font-weight: 700;">(${c.ciudad})</span>
         </div>
         <div style="font-size: 11px; color: #475569;">
           ${c.nombre_contacto} • <code>${c.usuario}</code> / <code>${c.password_visible}</code>
         </div>
       </div>
 
-      <button class="btn btn-outline" style="padding: 4px 9px; font-size: 11px;" onclick="openManagerHabitualEditor('${c.id}')">
-        Pedido Habitual
+      <button class="btn btn-outline" style="padding: 4px 10px; font-size: 11px;" onclick="openManagerHabitualEditor('${c.id}')">
+        ⭐ Pedido Habitual
       </button>
     </div>
   `).join('');
@@ -812,7 +955,7 @@ function openManagerHabitualEditor(clienteId) {
     });
 
   document.getElementById('managerHabitualEditorTitle').textContent =
-    `Pedido Habitual: ${client.nombre_negocio} (${client.ciudad})`;
+    `⭐ Pedido Habitual: ${client.nombre_negocio} (${client.ciudad})`;
   document.getElementById('managerHabitualEditorCard').style.display = 'block';
   renderManagerHabitualEditorGrid();
 }
@@ -842,9 +985,12 @@ function renderManagerHabitualEditorGrid() {
     const qty = state.managerHabitualDraft[p.id] || 0;
     return `
       <div class="product-card ${qty > 0 ? 'selected-card' : ''}">
-        <div style="min-width:0;">
-          <div style="font-weight: 700; font-size: 12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${p.nombre}</div>
-          <div style="font-size: 10px; color: #64748b;">${p.presentacion}</div>
+        <div style="display: flex; align-items: center; gap: 7px; min-width: 0;">
+          <div class="flavor-icon-box">${p.icono_emoji || '🥛'}</div>
+          <div style="min-width:0;">
+            <div style="font-weight: 700; font-size: 12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${p.nombre}</div>
+            <div style="font-size: 10px; color: #64748b;">${p.presentacion}</div>
+          </div>
         </div>
         <div class="qty-control">
           <button type="button" class="qty-btn" onclick="changeManagerHabitualQty('${p.id}', -1)">−</button>
@@ -894,7 +1040,7 @@ async function createOrderFromManagerHabitualModal() {
 }
 
 // ============================================================================
-// 7. GESTIÓN DE PRODUCTOS (SIN CATEGORÍA, PRECIOS NI STOCK)
+// 8. GESTIÓN DE PRODUCTOS (SIN CATEGORÍA, PRECIOS NI STOCK)
 // ============================================================================
 
 function toggleNewProductForm() {
@@ -964,19 +1110,22 @@ function renderManagerProducts() {
 
   grid.innerHTML = state.productos.map(p => `
     <div class="product-card" style="opacity: ${p.activo === false ? '0.45' : '1'};">
-      <div style="min-width: 0;">
-        <div style="font-weight: 700; font-size: 12px; color: #0f172a; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-          ${p.nombre}
-        </div>
-        <div style="font-size: 11px; color: #64748b;">
-          ${p.presentacion}
+      <div style="display: flex; align-items: center; gap: 8px; min-width: 0;">
+        <div class="flavor-icon-box">${p.icono_emoji || '🥛'}</div>
+        <div style="min-width: 0;">
+          <div style="font-weight: 700; font-size: 12px; color: #0f172a; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+            ${p.nombre}
+          </div>
+          <div style="font-size: 11px; color: #64748b;">
+            ${p.presentacion}
+          </div>
         </div>
       </div>
 
       <button
         type="button"
-        class="btn ${p.activo === false ? 'btn-teal' : 'btn-outline'}"
-        style="padding: 2px 8px; font-size: 11px;"
+        class="btn ${p.activo === false ? 'btn-primary' : 'btn-outline'}"
+        style="padding: 3px 9px; font-size: 11px;"
         onclick="toggleProductActive('${p.id}')"
       >
         ${p.activo === false ? 'Activar' : 'Ocultar'}
@@ -986,7 +1135,7 @@ function renderManagerProducts() {
 }
 
 // ============================================================================
-// 8. PORTAL DEL CLIENTE (MÍNIMO RUIDO VISUAL)
+// 9. PORTAL DEL CLIENTE (VIVO, TÁCTIL Y SÚPER INTUITIVO)
 // ============================================================================
 
 function initClientHabitualDraft(clienteId) {
@@ -999,17 +1148,15 @@ function initClientHabitualDraft(clienteId) {
 }
 
 function switchClientTab(tab) {
+  state.activeClientTab = tab;
   document.getElementById('clientSectionNewOrder').style.display = tab === 'newOrder' ? 'block' : 'none';
   document.getElementById('clientSectionHabitualConfig').style.display = tab === 'habitualConfig' ? 'block' : 'none';
   document.getElementById('clientSectionMyOrders').style.display = tab === 'myOrders' ? 'block' : 'none';
 
-  document.getElementById('clientTabBtnOrder').classList.toggle('active', tab === 'newOrder');
-  document.getElementById('clientTabBtnHabitual').classList.toggle('active', tab === 'habitualConfig');
-  document.getElementById('clientTabBtnHistory').classList.toggle('active', tab === 'myOrders');
-
   if (tab === 'habitualConfig' && state.currentUser) {
     initClientHabitualDraft(state.currentUser.id);
   }
+  updateTopbarTitles();
   renderClientPortal();
 }
 
@@ -1024,11 +1171,14 @@ function renderClientPortal() {
       const qty = state.clientCart[p.id] || 0;
       return `
         <div class="product-card ${qty > 0 ? 'selected-card' : ''}">
-          <div style="min-width: 0;">
-            <div style="font-weight: 700; font-size: 12px; color: #0f172a; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-              ${p.nombre}
+          <div style="display: flex; align-items: center; gap: 8px; min-width: 0;">
+            <div class="flavor-icon-box">${p.icono_emoji || '🥛'}</div>
+            <div style="min-width: 0;">
+              <div style="font-weight: 700; font-size: 12px; color: #0f172a; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                ${p.nombre}
+              </div>
+              <div style="font-size: 11px; color: #64748b;">${p.presentacion}</div>
             </div>
-            <div style="font-size: 11px; color: #64748b;">${p.presentacion}</div>
           </div>
 
           <div class="qty-control">
@@ -1047,11 +1197,14 @@ function renderClientPortal() {
       const qty = state.clientHabitualDraft[p.id] || 0;
       return `
         <div class="product-card ${qty > 0 ? 'selected-card' : ''}">
-          <div style="min-width: 0;">
-            <div style="font-weight: 700; font-size: 12px; color: #0f172a; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-              ${p.nombre}
+          <div style="display: flex; align-items: center; gap: 8px; min-width: 0;">
+            <div class="flavor-icon-box">${p.icono_emoji || '🥛'}</div>
+            <div style="min-width: 0;">
+              <div style="font-weight: 700; font-size: 12px; color: #0f172a; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                ${p.nombre}
+              </div>
+              <div style="font-size: 11px; color: #64748b;">${p.presentacion}</div>
             </div>
-            <div style="font-size: 11px; color: #64748b;">${p.presentacion}</div>
           </div>
 
           <div class="qty-control">
@@ -1067,13 +1220,10 @@ function renderClientPortal() {
   renderClientCartSummary();
 
   const myOrders = state.pedidos.filter(p => p.cliente_id === state.currentUser.id);
-  const badgeEl = document.getElementById('clientOrdersCountBadge');
-  if (badgeEl) badgeEl.textContent = myOrders.length;
-
   const myOrdersList = document.getElementById('clientMyOrdersList');
   if (myOrdersList) {
     myOrdersList.innerHTML = myOrders.length === 0
-      ? `<div class="card" style="text-align: center; padding: 14px;">Sin pedidos registrados.</div>`
+      ? `<div class="card" style="text-align: center; padding: 16px;">Aún no tienes pedidos registrados.</div>`
       : myOrders.map(o => renderOrderCardHTML(o, false)).join('');
   }
 }
@@ -1174,7 +1324,7 @@ function loadClientFrequentItemsToCart() {
   if (!state.currentUser) return;
   const frec = state.frecuentes.filter(f => f.cliente_id === state.currentUser.id);
   if (frec.length === 0) {
-    showToast('Primero configura tu Pedido Habitual');
+    showToast('Primero configura tu Pedido Habitual en el menú ☰');
     switchClientTab('habitualConfig');
     return;
   }
@@ -1184,6 +1334,7 @@ function loadClientFrequentItemsToCart() {
     state.clientCart[f.producto_id] = f.cantidad_habitual;
   });
   renderClientPortal();
+  showToast('⚡ Pedido Habitual cargado');
 }
 
 function renderClientCartSummary() {
@@ -1200,7 +1351,7 @@ function renderClientCartSummary() {
   }
 
   const totalUnits = entries.reduce((sum, [, qty]) => sum + qty, 0);
-  textEl.textContent = `${entries.length} producto(s) • ${totalUnits} unidades en total`;
+  textEl.textContent = `🧺 ${entries.length} producto(s) • ${totalUnits} unidades`;
   if (totalUnitsEl) totalUnitsEl.textContent = totalUnits;
   submitArea.style.display = 'flex';
 }
@@ -1230,22 +1381,24 @@ async function submitClientOrder() {
 }
 
 // ============================================================================
-// 9. UTILIDADES UI
+// 10. UTILIDADES UI
 // ============================================================================
 
+function toggleViewportMode() {
+  setViewportMode(state.viewportMode === 'mobile' ? 'desktop' : 'mobile');
+}
+
 function setViewportMode(mode) {
+  state.viewportMode = mode;
   const wrapper = document.getElementById('viewportWrapper');
-  const btnDesk = document.getElementById('btnViewDesktop');
-  const btnMob = document.getElementById('btnViewMobile');
+  const quickBtn = document.getElementById('quickViewportBtn');
 
   if (mode === 'mobile') {
     wrapper.classList.add('mobile-preview');
-    btnMob.classList.add('active');
-    btnDesk.classList.remove('active');
+    if (quickBtn) quickBtn.textContent = '💻';
   } else {
     wrapper.classList.remove('mobile-preview');
-    btnDesk.classList.add('active');
-    btnMob.classList.remove('active');
+    if (quickBtn) quickBtn.textContent = '📱';
   }
 }
 
@@ -1277,6 +1430,8 @@ function showToast(msg) {
 }
 
 function renderAll() {
+  updateTopbarTitles();
+  renderHamburgerMenu();
   renderQuickLoginList();
   if (state.currentUser?.rol === 'encargado') {
     renderManagerOrders();
